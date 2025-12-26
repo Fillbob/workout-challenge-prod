@@ -31,6 +31,15 @@ interface TeamRow {
   } | null;
 }
 
+interface TeamMembersResult {
+  team_id: string;
+  teams: {
+    id: string;
+    name: string;
+    join_code: string;
+  }[];
+}
+
 export default function DashboardPage() {
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState<string | null>(null);
@@ -75,7 +84,7 @@ export default function DashboardPage() {
       setTeamStatus(error.message);
       return;
     }
-    const normalizedTeams: TeamRow[] = (data ?? []).map((row: any) => ({
+    const normalizedTeams: TeamRow[] = (data ?? []).map((row: TeamMembersResult) => ({
       team_id: String(row.team_id),
       team: Array.isArray(row.teams) && row.teams.length > 0 ? row.teams[0] : null,
     }));
@@ -129,6 +138,14 @@ export default function DashboardPage() {
     if (stored) setActiveTeamId(stored);
   }, [userId, loadProfile, loadTeams, loadChallenges, loadSubmissions]);
 
+  useEffect(() => {
+    if (teams.length === 0) return;
+    if (activeTeamId && teams.some((team) => team.team?.id === activeTeamId)) return;
+
+    const firstTeamId = teams[0]?.team?.id;
+    if (firstTeamId) handleActiveTeamChange(firstTeamId);
+  }, [teams, activeTeamId]);
+
   const handleProfileSave = async () => {
     if (!userId) return;
     const { error } = await supabase
@@ -144,26 +161,44 @@ export default function DashboardPage() {
 
   const handleCreateTeam = async () => {
     setTeamStatus(null);
-    const { error } = await supabase.rpc("create_team", { team_name: teamName });
-    if (error) {
-      setTeamStatus(error.message);
-    } else {
-      setTeamStatus("Team created");
-      setTeamName("");
-      loadTeams();
+    const response = await fetch("/api/teams/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamName }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      setTeamStatus(result.error || "Unable to create team");
+      return;
     }
+
+    setTeamStatus("Team created");
+    setTeamName("");
+    if (result.team?.id) handleActiveTeamChange(String(result.team.id));
+    loadTeams();
   };
 
   const handleJoinTeam = async () => {
     setTeamStatus(null);
-    const { error } = await supabase.rpc("join_team", { join_code: joinCode });
-    if (error) {
-      setTeamStatus(error.message);
-    } else {
-      setTeamStatus("Joined team");
-      setJoinCode("");
-      loadTeams();
+    const response = await fetch("/api/teams/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ joinCode }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      setTeamStatus(result.error || "Unable to join team");
+      return;
     }
+
+    setTeamStatus("Joined team");
+    setJoinCode("");
+    if (result.team?.id) handleActiveTeamChange(String(result.team.id));
+    loadTeams();
   };
 
   const submissionState = useMemo(() => {
