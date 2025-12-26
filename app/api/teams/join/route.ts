@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const joinCode: string | undefined = body.joinCode;
+  const joinCode: string | undefined = body.joinCode?.trim();
 
   if (!joinCode) {
     return NextResponse.json({ error: "Join code is required" }, { status: 400 });
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   const { data: team, error: teamError } = await admin
     .from("teams")
     .select("id, name, join_code")
-    .eq("join_code", joinCode)
+    .ilike("join_code", joinCode)
     .single();
 
   if (teamError) {

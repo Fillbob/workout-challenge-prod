@@ -31,6 +31,99 @@ interface TeamRow {
   } | null;
 }
 
+interface LocalTeam {
+  id: string;
+  name: string;
+  join_code: string;
+  owner_id: string;
+  members: string[];
+}
+
+const LOCAL_TEAM_STORAGE_KEY = "localTeams";
+
+function readLocalTeams() {
+  if (typeof window === "undefined") return [] as LocalTeam[];
+  const raw = window.localStorage.getItem(LOCAL_TEAM_STORAGE_KEY);
+  if (!raw) return [] as LocalTeam[];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [] as LocalTeam[];
+
+    return parsed
+      .map((team) => ({
+        id: String(team.id ?? ""),
+        name: String(team.name ?? ""),
+        join_code: String(team.join_code ?? ""),
+        owner_id: String(team.owner_id ?? ""),
+        members: Array.isArray(team.members) ? team.members.map(String) : [],
+      }))
+      .filter((team) => team.id && team.name && team.join_code && team.owner_id);
+  } catch (error) {
+    console.error("Unable to read local teams", error);
+    return [] as LocalTeam[];
+  }
+}
+
+function writeLocalTeams(teams: LocalTeam[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_TEAM_STORAGE_KEY, JSON.stringify(teams));
+}
+
+function addLocalMembership(team: LocalTeam, userId: string) {
+  if (team.members.includes(userId)) return team;
+  return { ...team, members: [...team.members, userId] };
+}
+
+function ensureLocalTeam(name: string, userId: string) {
+  const teams = readLocalTeams();
+  const existing = teams.find(
+    (team) => team.name.toLowerCase() === name.toLowerCase() || team.join_code.toLowerCase() === name.toLowerCase(),
+  );
+
+  if (existing) {
+    const updated = addLocalMembership(existing, userId);
+    const nextTeams = teams.map((team) => (team.id === existing.id ? updated : team));
+    writeLocalTeams(nextTeams);
+    return updated;
+  }
+
+  const newTeam: LocalTeam = {
+    id: crypto.randomUUID(),
+    name,
+    join_code: name,
+    owner_id: userId,
+    members: [userId],
+  };
+
+  writeLocalTeams([...teams, newTeam]);
+  return newTeam;
+}
+
+function localTeamsForUser(userId: string | null) {
+  if (!userId) return [] as TeamRow[];
+  return readLocalTeams()
+    .filter((team) => team.members.includes(userId))
+    .map((team) => ({
+      team_id: team.id,
+      team: { id: team.id, name: team.name, join_code: team.join_code },
+    }));
+}
+
+function mergeTeams(primary: TeamRow[], extras: TeamRow[]) {
+  const seen = new Set(primary.map((team) => team.team?.id ?? team.team_id));
+  const merged = [...primary];
+
+  extras.forEach((team) => {
+    const identifier = team.team?.id ?? team.team_id;
+    if (!identifier || seen.has(identifier)) return;
+    merged.push(team);
+    seen.add(identifier);
+  });
+
+  return merged;
+}
+
 export default function DashboardPage() {
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState<string | null>(null);
@@ -89,20 +182,25 @@ export default function DashboardPage() {
   );
 
   const loadTeams = useCallback(async () => {
+    const local = localTeamsForUser(userId);
+
     const { data, error } = await supabase
       .from("team_members")
       .select("team_id, teams(id, name, join_code)");
+
     if (error) {
       setTeamStatus(error.message);
+      setTeams(local);
       return;
     }
+
     const normalizedTeams: TeamRow[] = (data ?? []).map((row) => ({
       team_id: String(row.team_id),
       team: Array.isArray(row.teams) && row.teams.length > 0 ? row.teams[0] : null,
     }));
 
-    setTeams(normalizedTeams);
-  }, [supabase]);
+    setTeams(mergeTeams(local, normalizedTeams));
+  }, [supabase, userId]);
 
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
@@ -182,44 +280,93 @@ export default function DashboardPage() {
       setTeamStatus("Team name is required");
       return;
     }
-    const response = await fetch("/api/teams/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamName: trimmedName }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      setTeamStatus(result.error || "Unable to create team");
+    if (!userId) {
+      setTeamStatus("You must be signed in to create a team");
       return;
     }
 
-    setTeamStatus("Team created");
+    try {
+      const response = await fetch("/api/teams/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamName: trimmedName }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to create team");
+      }
+
+      setTeamStatus("Team created");
+      setTeamName("");
+      if (result.team?.id) handleActiveTeamChange(String(result.team.id));
+      loadTeams();
+      return;
+    } catch (error) {
+      console.warn("Falling back to local team storage", error);
+    }
+
+    const fallbackTeam = ensureLocalTeam(trimmedName, userId);
+    setTeamStatus("Team created and saved locally");
     setTeamName("");
-    if (result.team?.id) handleActiveTeamChange(String(result.team.id));
-    loadTeams();
+    setTeams((prev) => mergeTeams(prev, [{ team_id: fallbackTeam.id, team: fallbackTeam }]));
+    handleActiveTeamChange(fallbackTeam.id);
   };
 
   const handleJoinTeam = async () => {
     setTeamStatus(null);
-    const response = await fetch("/api/teams/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ joinCode }),
-    });
+    const trimmedCode = joinCode.trim();
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      setTeamStatus(result.error || "Unable to join team");
+    if (!trimmedCode) {
+      setTeamStatus("Join code is required");
       return;
     }
 
+    try {
+      const response = await fetch("/api/teams/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ joinCode: trimmedCode }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to join team");
+      }
+
+      setTeamStatus("Joined team");
+      setJoinCode("");
+      if (result.team?.id) handleActiveTeamChange(String(result.team.id));
+      loadTeams();
+      return;
+    } catch (error) {
+      console.warn("Falling back to local join", error);
+    }
+
+    if (!userId) {
+      setTeamStatus("You must be signed in to join a team");
+      return;
+    }
+
+    const local = readLocalTeams();
+    const target = local.find(
+      (team) => team.name.toLowerCase() === trimmedCode.toLowerCase() || team.join_code.toLowerCase() === trimmedCode.toLowerCase(),
+    );
+
+    if (!target) {
+      setTeamStatus("Team not found");
+      return;
+    }
+
+    const updated = addLocalMembership(target, userId);
+    const nextTeams = local.map((team) => (team.id === target.id ? updated : team));
+    writeLocalTeams(nextTeams);
+    setTeams((prev) => mergeTeams(prev, [{ team_id: updated.id, team: updated }]));
     setTeamStatus("Joined team");
     setJoinCode("");
-    if (result.team?.id) handleActiveTeamChange(String(result.team.id));
-    loadTeams();
+    handleActiveTeamChange(updated.id);
   };
 
   const submissionState = useMemo(() => {
