@@ -1,15 +1,7 @@
 import { getServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
-
-function generateJoinCode() {
-  return randomBytes(4)
-    .toString("hex")
-    .slice(0, 8)
-    .toUpperCase();
-}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
@@ -30,37 +22,15 @@ export async function POST(request: Request) {
 
   const admin = getServiceRoleClient();
 
-  type TeamRecord = { id: string; name: string; join_code: string };
+  const { data: teamResult, error: teamError } = await admin
+    .from("teams")
+    .insert({ name: teamName, join_code: teamName })
+    .select("id, name, join_code")
+    .single();
 
-  let teamResult: TeamRecord | null = null;
-  let attempt = 0;
-  let lastError: PostgrestError | null = null;
-
-  while (attempt < 5 && !teamResult) {
-    const joinCode = generateJoinCode();
-    const { data, error } = await admin
-      .from("teams")
-      .insert({ name: teamName, join_code: joinCode })
-      .select("id, name, join_code")
-      .single();
-
-    if (error) {
-      lastError = error;
-      if (error.code === "23505") {
-        attempt += 1;
-        continue;
-      }
-      break;
-    }
-
-    teamResult = data;
-  }
-
-  if (!teamResult) {
-    return NextResponse.json(
-      { error: "Unable to create team" },
-      { status: lastError?.code === "23505" ? 409 : 500 },
-    );
+  if (teamError || !teamResult) {
+    const status = (teamError as PostgrestError | null)?.code === "23505" ? 409 : 500;
+    return NextResponse.json({ error: teamError?.message || "Unable to create team" }, { status });
   }
 
   const { error: memberError } = await admin
