@@ -79,14 +79,18 @@ export async function GET(request: Request) {
   const total = count ?? data?.length ?? 0;
   const hasMore = offset + safeLimit < total;
 
-  const submissions = (data ?? []).map((row) => ({
-    id: row.id,
-    user_id: row.user_id,
-    challenge_id: row.challenge_id,
-    challenge_title: row.challenges?.[0]?.title ?? "",
-    completed_at: row.completed_at,
-    name: row.profiles?.display_name ?? "Member",
-  }));
+  const submissions = (data ?? []).map((row) => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      challenge_id: row.challenge_id,
+      challenge_title: row.challenges?.[0]?.title ?? "",
+      completed_at: row.completed_at,
+      name: profile?.display_name ?? "Member",
+    };
+  });
 
   return NextResponse.json({ submissions, hasMore, total });
 }
