@@ -13,7 +13,7 @@ type ContributionRow = {
 
 type StatsRow = {
   user_id: string;
-  challenges: { base_points: number | null } | { base_points: number | null }[] | null;
+  challenges: { base_points: number | null } | null;
 };
 
 export async function GET(request: Request) {
@@ -94,8 +94,7 @@ export async function GET(request: Request) {
   const leaderboardTotals = new Map<string, { points: number; completed: number }>();
   (statsRows as StatsRow[] | null)?.forEach((row) => {
     const existing = leaderboardTotals.get(row.user_id) ?? { points: 0, completed: 0 };
-    const challenge = Array.isArray(row.challenges) ? row.challenges[0] : row.challenges;
-    const points = challenge?.base_points ?? 0;
+    const points = row.challenges?.base_points ?? 0;
     leaderboardTotals.set(row.user_id, {
       points: existing.points + points,
       completed: existing.completed + 1,
