@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
               headers: request.headers,
             },
           });
-          response.cookies.delete(name);
+          response.cookies.delete({ name, ...options });
         },
       },
     },
