@@ -88,7 +88,9 @@ function removeLocalMembership(teamId: string, userId: string) {
   const teams = readLocalTeams();
   const updated = teams
     .map((team) =>
-      team.id === teamId ? { ...team, members: team.members.filter((member) => member !== userId) } : team,
+      team.id === teamId
+        ? { ...team, members: team.members.filter((member: string) => member !== userId) }
+        : team,
     )
     .filter((team) => team.members.length > 0);
 
