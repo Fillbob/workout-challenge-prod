@@ -84,29 +84,18 @@ function addLocalMembership(team: LocalTeam, userId: string) {
   return { ...team, members: [...team.members, userId] };
 }
 
-function ensureLocalTeam(name: string, userId: string) {
+function removeLocalMembership(teamId: string, userId: string) {
   const teams = readLocalTeams();
-  const existing = teams.find(
-    (team) => team.name.toLowerCase() === name.toLowerCase() || team.join_code.toLowerCase() === name.toLowerCase(),
-  );
+  const updated = teams
+    .map((team) =>
+      team.id === teamId
+        ? { ...team, members: team.members.filter((member: string) => member !== userId) }
+        : team,
+    )
+    .filter((team) => team.members.length > 0);
 
-  if (existing) {
-    const updated = addLocalMembership(existing, userId);
-    const nextTeams = teams.map((team) => (team.id === existing.id ? updated : team));
-    writeLocalTeams(nextTeams);
-    return updated;
-  }
-
-  const newTeam: LocalTeam = {
-    id: crypto.randomUUID(),
-    name,
-    join_code: name,
-    owner_id: userId,
-    members: [userId],
-  };
-
-  writeLocalTeams([...teams, newTeam]);
-  return newTeam;
+  writeLocalTeams(updated);
+  return updated;
 }
 
 function localTeamsForUser(userId: string | null) {
@@ -141,7 +130,6 @@ export default function DashboardPage() {
   const [profileRole, setProfileRole] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
-  const [teamName, setTeamName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [teamStatus, setTeamStatus] = useState<string | null>(null);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -157,6 +145,16 @@ export default function DashboardPage() {
   const [recentOffset, setRecentOffset] = useState(0);
 
   const RECENT_PAGE_SIZE = 8;
+
+  const handleActiveTeamChange = useCallback((teamId: string) => {
+    setActiveTeamId(teamId);
+    window.localStorage.setItem("activeTeamId", teamId);
+  }, []);
+
+  const clearActiveTeam = useCallback(() => {
+    setActiveTeamId(null);
+    window.localStorage.removeItem("activeTeamId");
+  }, []);
 
   const initializeProfile = useCallback(
     async (id: string) => {
@@ -269,12 +267,15 @@ export default function DashboardPage() {
   }, [userId, initializeProfile, loadTeams, loadChallenges, loadSubmissions]);
 
   useEffect(() => {
-    if (teams.length === 0) return;
+    if (teams.length === 0) {
+      clearActiveTeam();
+      return;
+    }
     if (activeTeamId && teams.some((team) => team.team?.id === activeTeamId)) return;
 
     const firstTeamId = teams[0]?.team?.id;
     if (firstTeamId) handleActiveTeamChange(firstTeamId);
-  }, [teams, activeTeamId]);
+  }, [teams, activeTeamId, handleActiveTeamChange, clearActiveTeam]);
 
   useEffect(() => {
     if (!saveStatus) return;
@@ -299,47 +300,6 @@ export default function DashboardPage() {
     } else {
       setProfileStatus("Name updated");
     }
-  };
-
-  const handleCreateTeam = async () => {
-    setTeamStatus(null);
-    const trimmedName = teamName.trim();
-    if (!trimmedName) {
-      setTeamStatus("Team name is required");
-      return;
-    }
-    if (!userId) {
-      setTeamStatus("You must be signed in to create a team");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/teams/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamName: trimmedName }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Unable to create team");
-      }
-
-      setTeamStatus("Team created");
-      setTeamName("");
-      if (result.team?.id) handleActiveTeamChange(String(result.team.id));
-      loadTeams();
-      return;
-    } catch (error) {
-      console.warn("Falling back to local team storage", error);
-    }
-
-    const fallbackTeam = ensureLocalTeam(trimmedName, userId);
-    setTeamStatus("Team created and saved locally");
-    setTeamName("");
-    setTeams((prev) => mergeTeams(prev, [{ team_id: fallbackTeam.id, team: fallbackTeam }]));
-    handleActiveTeamChange(fallbackTeam.id);
   };
 
   const handleJoinTeam = async () => {
@@ -395,6 +355,55 @@ export default function DashboardPage() {
     setTeamStatus("Joined team");
     setJoinCode("");
     handleActiveTeamChange(updated.id);
+  };
+
+  const handleLeaveTeam = async (teamId: string) => {
+    setTeamStatus(null);
+
+    if (!userId) {
+      setTeamStatus("You must be signed in to leave a team");
+      return;
+    }
+
+    let leftServer = false;
+
+    try {
+      const response = await fetch("/api/teams/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to leave team");
+      }
+
+      leftServer = true;
+    } catch (error) {
+      console.warn("Falling back to local team removal", error);
+    }
+
+    removeLocalMembership(teamId, userId);
+    const localMemberships = localTeamsForUser(userId);
+
+    setTeams((prev) => {
+      const filtered = prev.filter((team) => team.team?.id !== teamId && team.team_id !== teamId);
+      const merged = mergeTeams(localMemberships, filtered);
+
+      if (activeTeamId === teamId) {
+        const nextTeamId = merged[0]?.team?.id;
+        if (nextTeamId) {
+          handleActiveTeamChange(nextTeamId);
+        } else {
+          clearActiveTeam();
+        }
+      }
+
+      return merged;
+    });
+
+    setTeamStatus(leftServer ? "Left team" : "Left team locally");
   };
 
   const submissionState = useMemo(() => {
@@ -455,11 +464,6 @@ export default function DashboardPage() {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleActiveTeamChange = (teamId: string) => {
-    setActiveTeamId(teamId);
-    window.localStorage.setItem("activeTeamId", teamId);
   };
 
   const activeTeamName = teams.find((t) => t.team?.id === activeTeamId)?.team?.name;
@@ -570,20 +574,6 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="flex gap-2">
               <input
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                placeholder="Team name"
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                onClick={handleCreateTeam}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
-              >
-                Create
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="Join code"
@@ -614,12 +604,20 @@ export default function DashboardPage() {
                         <p className="font-medium">{row.team.name}</p>
                         <p className="text-xs text-slate-400">Join code: {row.team.join_code}</p>
                       </div>
-                      <button
-                        onClick={() => handleActiveTeamChange(row.team!.id)}
-                        className="text-sm text-indigo-400"
-                      >
-                        {activeTeamId === row.team.id ? "Active" : "Set active"}
-                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleActiveTeamChange(row.team!.id)}
+                          className="text-sm text-indigo-400"
+                        >
+                          {activeTeamId === row.team.id ? "Active" : "Set active"}
+                        </button>
+                        <button
+                          onClick={() => handleLeaveTeam(row.team!.id)}
+                          className="text-sm text-rose-400"
+                        >
+                          Leave
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
