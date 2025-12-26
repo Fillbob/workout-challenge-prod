@@ -22,21 +22,6 @@ interface Submission {
   completed_at: string | null;
 }
 
-interface TeamRowRaw {
-  team_id: string;
-  teams:
-    | {
-        id: string;
-        name: string;
-        join_code: string;
-      }
-    | {
-        id: string;
-        name: string;
-        join_code: string;
-      }[];
-}
-
 interface TeamRow {
   team_id: string;
   teams: {
@@ -90,18 +75,7 @@ export default function DashboardPage() {
       setTeamStatus(error.message);
       return;
     }
-    const normalized: TeamRow[] = ((data as TeamRowRaw[] | null) ?? [])
-      .map((row) => {
-        const team = Array.isArray(row.teams) ? row.teams[0] : row.teams;
-        return team
-          ? {
-              team_id: row.team_id,
-              teams: team,
-            }
-          : null;
-      })
-      .filter((row): row is TeamRow => row !== null);
-    setTeams(normalized);
+    setTeams(data ?? []);
   }, [supabase]);
 
   const loadChallenges = useCallback(async () => {
