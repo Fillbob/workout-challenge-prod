@@ -27,23 +27,28 @@ export default function LeaderboardPage() {
   const [status, setStatus] = useState<string | null>(null);
 
   const loadTeams = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("team_id, teams(id, name)");
-    if (error) {
-      setStatus(error.message);
-      return;
+    try {
+      const response = await fetch("/api/teams/memberships");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load teams");
+      }
+
+      setTeams(
+        (payload.teams ?? []).map((row: { team_id: string; teams?: { id: string; name: string }[] }) => ({
+          team_id: String(row.team_id),
+          teams: row.teams?.map((team) => ({
+            id: String(team.id),
+            name: String(team.name),
+          })) ?? [],
+        })),
+      );
+      setStatus(null);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to load teams");
     }
-    setTeams(
-      (data ?? []).map((row) => ({
-        team_id: String(row.team_id),
-        teams: row.teams?.map((team) => ({
-          id: String(team.id),
-          name: String(team.name),
-        })) ?? [],
-      })),
-    );
-  }, [supabase]);
+  }, []);
 
   const loadLeaderboard = useCallback(
     async (teamId: string) => {
@@ -74,6 +79,17 @@ export default function LeaderboardPage() {
       loadLeaderboard(stored);
     }
   }, [loadLeaderboard]);
+
+  useEffect(() => {
+    if (activeTeam || teams.length === 0) return;
+
+    const firstTeamId = teams[0].teams[0]?.id ?? teams[0].team_id;
+    if (firstTeamId) {
+      setActiveTeam(firstTeamId);
+      window.localStorage.setItem("activeTeamId", firstTeamId);
+      loadLeaderboard(firstTeamId);
+    }
+  }, [activeTeam, loadLeaderboard, teams]);
 
   const handleTeamChange = (id: string) => {
     setActiveTeam(id);

@@ -16,7 +16,7 @@ export default function Home() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        router.replace("/dashboard");
+        router.replace("/leaderboard");
       }
     });
   }, [router, supabase]);
@@ -86,7 +86,7 @@ export default function Home() {
 
     if (data.session?.user) {
       await ensureProfile(data.session.user);
-      router.replace("/dashboard");
+      router.replace("/leaderboard");
     }
   };
 

@@ -184,23 +184,27 @@ export default function DashboardPage() {
   const loadTeams = useCallback(async () => {
     const local = localTeamsForUser(userId);
 
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("team_id, teams(id, name, join_code)");
+    try {
+      const response = await fetch("/api/teams/memberships");
+      const payload = await response.json();
 
-    if (error) {
-      setTeamStatus(error.message);
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load teams");
+      }
+
+      const normalizedTeams: TeamRow[] = (payload.teams ?? []).map((row: { team_id: string; teams?: TeamRow["team"] }) => ({
+        team_id: String(row.team_id),
+        team: Array.isArray(row.teams) ? row.teams[0] : row.teams ?? null,
+      }));
+
+      setTeams(mergeTeams(local, normalizedTeams));
+      setTeamStatus(null);
+    } catch (error) {
+      console.warn("Falling back to local teams", error);
+      setTeamStatus(error instanceof Error ? error.message : "Unable to load teams");
       setTeams(local);
-      return;
     }
-
-    const normalizedTeams: TeamRow[] = (data ?? []).map((row) => ({
-      team_id: String(row.team_id),
-      team: Array.isArray(row.teams) && row.teams.length > 0 ? row.teams[0] : null,
-    }));
-
-    setTeams(mergeTeams(local, normalizedTeams));
-  }, [supabase, userId]);
+  }, [userId]);
 
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
