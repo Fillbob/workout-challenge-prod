@@ -9,7 +9,7 @@ interface TeamRow {
   teams: {
     id: string;
     name: string;
-  };
+  }[];
 }
 
 interface LeaderboardRow {
@@ -34,7 +34,15 @@ export default function LeaderboardPage() {
       setStatus(error.message);
       return;
     }
-    setTeams(data ?? []);
+    setTeams(
+      (data ?? []).map((row) => ({
+        team_id: String(row.team_id),
+        teams: row.teams?.map((team) => ({
+          id: String(team.id),
+          name: String(team.name),
+        })) ?? [],
+      })),
+    );
   }, [supabase]);
 
   const loadLeaderboard = useCallback(
@@ -98,8 +106,8 @@ export default function LeaderboardPage() {
                 Select team
               </option>
               {teams.map((row) => (
-                <option key={row.teams.id} value={row.teams.id}>
-                  {row.teams.name}
+                <option key={row.team_id} value={row.teams[0]?.id ?? row.team_id}>
+                  {row.teams[0]?.name ?? "Unnamed team"}
                 </option>
               ))}
             </select>
