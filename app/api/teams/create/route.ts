@@ -1,5 +1,6 @@
 import { getServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { generateJoinCode } from "@/lib/joinCodes";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -22,14 +23,32 @@ export async function POST(request: Request) {
 
   const admin = getServiceRoleClient();
 
-  const { data: teamResult, error: teamError } = await admin
-    .from("teams")
-    .insert({ name: teamName, join_code: teamName })
-    .select("id, name, join_code")
-    .single();
+  let teamResult: { id: string; name: string; join_code: string } | null = null;
+  let teamError: PostgrestError | null = null;
 
-  if (teamError || !teamResult) {
-    const status = (teamError as PostgrestError | null)?.code === "23505" ? 409 : 500;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const joinCode = generateJoinCode();
+
+    const { data, error } = await admin
+      .from("teams")
+      .insert({ name: teamName, join_code: joinCode })
+      .select("id, name, join_code")
+      .single();
+
+    if (!error && data) {
+      teamResult = data;
+      break;
+    }
+
+    teamError = error;
+
+    if (error?.code !== "23505") {
+      break;
+    }
+  }
+
+  if (!teamResult) {
+    const status = teamError?.code === "23505" ? 409 : 500;
     return NextResponse.json({ error: teamError?.message || "Unable to create team" }, { status });
   }
 
