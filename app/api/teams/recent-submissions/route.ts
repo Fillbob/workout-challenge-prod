@@ -83,7 +83,7 @@ export async function GET(request: Request) {
     id: row.id,
     user_id: row.user_id,
     challenge_id: row.challenge_id,
-    challenge_title: row.challenges?.title ?? "",
+    challenge_title: row.challenges?.[0]?.title ?? "",
     completed_at: row.completed_at,
     name: row.profiles?.display_name ?? "Member",
   }));
