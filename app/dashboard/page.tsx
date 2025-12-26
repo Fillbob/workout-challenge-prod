@@ -22,6 +22,15 @@ interface Submission {
   completed_at: string | null;
 }
 
+interface RecentSubmission {
+  id: string;
+  user_id: string;
+  challenge_id: string;
+  challenge_title: string;
+  completed_at: string | null;
+  name: string;
+}
+
 interface TeamRow {
   team_id: string;
   team: {
@@ -140,6 +149,13 @@ export default function DashboardPage() {
   const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
+  const [recentSubmissions, setRecentSubmissions] = useState<RecentSubmission[]>([]);
+  const [recentStatus, setRecentStatus] = useState<string | null>(null);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentHasMore, setRecentHasMore] = useState(false);
+  const [recentOffset, setRecentOffset] = useState(0);
+
+  const RECENT_PAGE_SIZE = 8;
 
   const initializeProfile = useCallback(
     async (id: string) => {
@@ -426,6 +442,46 @@ export default function DashboardPage() {
 
   const activeTeamName = teams.find((t) => t.team?.id === activeTeamId)?.team?.name;
 
+  const loadRecentActivity = useCallback(
+    async (teamId: string, reset = false) => {
+      setRecentStatus(null);
+      setRecentLoading(true);
+
+      const nextOffset = reset ? 0 : recentOffset;
+
+      try {
+        const response = await fetch(
+          `/api/teams/recent-submissions?teamId=${teamId}&limit=${RECENT_PAGE_SIZE}&offset=${nextOffset}`,
+        );
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to load recent submissions");
+        }
+
+        const submissions: RecentSubmission[] = payload.submissions ?? [];
+        setRecentSubmissions((prev) => (reset ? submissions : [...prev, ...submissions]));
+        setRecentHasMore(Boolean(payload.hasMore));
+        setRecentOffset(nextOffset + submissions.length);
+      } catch (error) {
+        setRecentStatus(error instanceof Error ? error.message : "Unable to load recent submissions");
+      } finally {
+        setRecentLoading(false);
+      }
+    },
+    [RECENT_PAGE_SIZE, recentOffset],
+  );
+
+  useEffect(() => {
+    if (!activeTeamId) return;
+    loadRecentActivity(activeTeamId, true);
+  }, [activeTeamId, loadRecentActivity]);
+
+  const formatTimestamp = (value: string | null) => {
+    if (!value) return "";
+    return new Date(value).toLocaleString();
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-6xl mx-auto p-8 space-y-10">
@@ -599,6 +655,57 @@ export default function DashboardPage() {
               );
             })}
           </div>
+        </section>
+
+        <section className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-indigo-400">Team activity</p>
+              <h2 className="text-2xl font-semibold">Recent submissions</h2>
+              <p className="text-slate-400 text-sm">Last 7 days</p>
+            </div>
+            {recentStatus && <span className="text-sm text-rose-400">{recentStatus}</span>}
+          </div>
+
+          {!activeTeamId && <p className="text-slate-500 text-sm">Set an active team to see recent activity.</p>}
+
+          {activeTeamId && (
+            <div className="space-y-3">
+              {recentSubmissions.length === 0 && !recentLoading && (
+                <p className="text-slate-500 text-sm">No submissions yet.</p>
+              )}
+
+              <ul className="space-y-2">
+                {recentSubmissions.map((submission) => (
+                  <li
+                    key={submission.id}
+                    className="flex items-start justify-between rounded-lg border border-slate-800 bg-slate-800/70 p-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="font-medium">{submission.name}</p>
+                      <p className="text-sm text-slate-300">Completed {submission.challenge_title}</p>
+                    </div>
+                    <p className="text-xs text-slate-500">{formatTimestamp(submission.completed_at)}</p>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex items-center gap-3">
+                <button
+                  disabled={!recentHasMore || recentLoading}
+                  onClick={() => activeTeamId && loadRecentActivity(activeTeamId)}
+                  className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                    recentHasMore
+                      ? "bg-indigo-500 text-white hover:bg-indigo-600"
+                      : "cursor-not-allowed bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {recentLoading ? "Loading..." : recentHasMore ? "Load more" : "No more results"}
+                </button>
+                <p className="text-xs text-slate-500">Showing {recentSubmissions.length} of {recentOffset} loaded</p>
+              </div>
+            </div>
+          )}
         </section>
 
         {activeTeamId && (
