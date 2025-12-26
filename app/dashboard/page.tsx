@@ -31,19 +31,12 @@ interface TeamRow {
   } | null;
 }
 
-interface TeamMembersResult {
-  team_id: string;
-  teams: {
-    id: string;
-    name: string;
-    join_code: string;
-  }[];
-}
-
 export default function DashboardPage() {
   const supabase = getSupabaseClient();
   const [userId, setUserId] = useState<string | null>(null);
+  const [userIdentifier, setUserIdentifier] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [profileRole, setProfileRole] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [teamName, setTeamName] = useState("");
@@ -55,23 +48,42 @@ export default function DashboardPage() {
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
 
-  const ensureProfileExists = useCallback(
+  const initializeProfile = useCallback(
     async (id: string) => {
-      await supabase
-        .from("profiles")
-        .upsert({ id, display_name: profileName || "New athlete", role: "user" });
-    },
-    [profileName, supabase],
-  );
+      setProfileStatus(null);
+      const { data: authData } = await supabase.auth.getUser();
+      const emailIdentifier = authData.user?.email?.split("@")[0] || authData.user?.email || null;
+      setUserIdentifier(emailIdentifier);
+      const fallbackName = emailIdentifier || "New athlete";
 
-  const loadProfile = useCallback(
-    async (id: string) => {
-      const { data } = await supabase
+      const { data: existing, error } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("display_name, role")
         .eq("id", id)
-        .single();
-      if (data?.display_name) setProfileName(data.display_name);
+        .maybeSingle();
+
+      if (error) {
+        setProfileStatus(error.message);
+        return;
+      }
+
+      if (!existing) {
+        const { error: insertError } = await supabase
+          .from("profiles")
+          .insert({ id, display_name: fallbackName, role: "user" });
+
+        if (insertError) {
+          setProfileStatus(insertError.message);
+          return;
+        }
+
+        setProfileName(fallbackName);
+        setProfileRole("user");
+        return;
+      }
+
+      setProfileName(existing.display_name || fallbackName);
+      setProfileRole(existing.role || "user");
     },
     [supabase],
   );
@@ -125,18 +137,17 @@ export default function DashboardPage() {
 
   useRequireUser((id) => {
     setUserId(id);
-    ensureProfileExists(id);
   });
 
   useEffect(() => {
     if (!userId) return;
-    loadProfile(userId);
+    initializeProfile(userId);
     loadTeams();
     loadChallenges();
     loadSubmissions(userId);
     const stored = window.localStorage.getItem("activeTeamId");
     if (stored) setActiveTeamId(stored);
-  }, [userId, loadProfile, loadTeams, loadChallenges, loadSubmissions]);
+  }, [userId, initializeProfile, loadTeams, loadChallenges, loadSubmissions]);
 
   useEffect(() => {
     if (teams.length === 0) return;
@@ -148,9 +159,14 @@ export default function DashboardPage() {
 
   const handleProfileSave = async () => {
     if (!userId) return;
+    const trimmedName = profileName.trim();
+    if (!trimmedName) {
+      setProfileStatus("Name cannot be empty");
+      return;
+    }
     const { error } = await supabase
       .from("profiles")
-      .update({ display_name: profileName })
+      .update({ display_name: trimmedName })
       .eq("id", userId);
     if (error) {
       setProfileStatus(error.message);
@@ -161,10 +177,15 @@ export default function DashboardPage() {
 
   const handleCreateTeam = async () => {
     setTeamStatus(null);
+    const trimmedName = teamName.trim();
+    if (!trimmedName) {
+      setTeamStatus("Team name is required");
+      return;
+    }
     const response = await fetch("/api/teams/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamName }),
+      body: JSON.stringify({ teamName: trimmedName }),
     });
 
     const result = await response.json();
@@ -276,7 +297,13 @@ export default function DashboardPage() {
         <section className="grid md:grid-cols-2 gap-6">
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Profile</h2>
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold">Profile</h2>
+                <div className="flex gap-2 text-xs text-slate-300">
+                  {userIdentifier && <span className="px-2 py-1 rounded bg-slate-800">ID: {userIdentifier}</span>}
+                  {profileRole && <span className="px-2 py-1 rounded bg-slate-800">Access: {profileRole}</span>}
+                </div>
+              </div>
               {profileStatus && <span className="text-sm text-indigo-400">{profileStatus}</span>}
             </div>
             <div className="space-y-2">
