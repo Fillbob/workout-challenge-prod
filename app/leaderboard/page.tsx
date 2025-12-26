@@ -1,7 +1,7 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 interface TeamRow {
   team_id: string;
@@ -36,6 +36,8 @@ export default function LeaderboardPage() {
   const [activityHasMore, setActivityHasMore] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+
+  const activityOffsetRef = useRef(0);
 
   const PAGE_SIZE = 15;
 
@@ -93,12 +95,13 @@ export default function LeaderboardPage() {
       setStatus(null);
       setActivityLoading(true);
       if (reset) {
+        activityOffsetRef.current = 0;
         setActivityOffset(0);
         setContributions({});
         setExpandedUser(null);
       }
 
-      const offset = reset ? 0 : activityOffset;
+      const offset = reset ? 0 : activityOffsetRef.current;
 
       try {
         const params = new URLSearchParams({
@@ -120,14 +123,16 @@ export default function LeaderboardPage() {
         setRows(payload.leaderboard ?? []);
         setContributions((prev) => appendContributions(prev, returnedContributions, reset));
         setActivityHasMore(Boolean(payload.hasMore));
-        setActivityOffset(offset + contributionCount);
+        const nextOffset = offset + contributionCount;
+        activityOffsetRef.current = nextOffset;
+        setActivityOffset(nextOffset);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Unable to load leaderboard");
       } finally {
         setActivityLoading(false);
       }
     },
-    [PAGE_SIZE, activityOffset, appendContributions],
+    [PAGE_SIZE, appendContributions],
   );
 
   useRequireUser((id) => setUserId(id));
