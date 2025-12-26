@@ -146,7 +146,19 @@ export default function LeaderboardPage() {
   }, [loadLeaderboard]);
 
   useEffect(() => {
-    if (activeTeam || teams.length === 0) return;
+    if (activeTeam && teams.length > 0) {
+      const knownIds = teams.flatMap((entry) => entry.teams.map((team) => team.id ?? entry.team_id));
+      if (!knownIds.includes(activeTeam)) {
+        setActiveTeam(null);
+      }
+    }
+
+    if (activeTeam || teams.length === 0) {
+      if (teams.length === 0) {
+        setStatus("Join or create a team to see the leaderboard.");
+      }
+      return;
+    }
 
     const firstTeamId = teams[0].teams[0]?.id ?? teams[0].team_id;
     if (firstTeamId) {
@@ -191,6 +203,7 @@ export default function LeaderboardPage() {
             <select
               value={activeTeam ?? ""}
               onChange={(e) => handleTeamChange(e.target.value)}
+              disabled={teams.length === 0}
               className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="" disabled>
