@@ -138,7 +138,8 @@ export default function DashboardPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, Submission>>({});
   const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
 
   const initializeProfile = useCallback(
@@ -212,7 +213,7 @@ export default function DashboardPage() {
       .select("*")
       .order("week_index", { ascending: true });
     if (error) {
-      setSaveStatus(error.message);
+      setSaveStatus({ message: error.message, tone: "error" });
       return;
     }
     setChallenges(data ?? []);
@@ -225,7 +226,7 @@ export default function DashboardPage() {
         .select("id, challenge_id, completed, completed_at, user_id")
         .eq("user_id", id);
       if (error) {
-        setSaveStatus(error.message);
+        setSaveStatus({ message: error.message, tone: "error" });
         return;
       }
       const map: Record<string, Submission> = {};
@@ -258,6 +259,13 @@ export default function DashboardPage() {
     const firstTeamId = teams[0]?.team?.id;
     if (firstTeamId) handleActiveTeamChange(firstTeamId);
   }, [teams, activeTeamId]);
+
+  useEffect(() => {
+    if (!saveStatus) return;
+
+    const timer = window.setTimeout(() => setSaveStatus(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [saveStatus]);
 
   const handleProfileSave = async () => {
     if (!userId) return;
@@ -396,8 +404,9 @@ export default function DashboardPage() {
   };
 
   const handleSaveSubmissions = async () => {
-    if (!userId || changedIds.size === 0) return;
+    if (!userId || changedIds.size === 0 || isSaving) return;
     setSaveStatus(null);
+    setIsSaving(true);
     console.log("Saving submissions via", process.env.NEXT_PUBLIC_SUPABASE_URL);
     const payload = Array.from(changedIds).map((id) => ({
       challenge_id: id,
@@ -406,16 +415,23 @@ export default function DashboardPage() {
       completed_at: submissions[id]?.completed ? submissions[id]?.completed_at : null,
     }));
 
-    const { error } = await supabase
-      .from("submissions")
-      .upsert(payload, { onConflict: "challenge_id,user_id" });
+    try {
+      const { error } = await supabase
+        .from("submissions")
+        .upsert(payload, { onConflict: "challenge_id,user_id" });
 
-    if (error) {
-      setSaveStatus(error.message);
-    } else {
-      setSaveStatus("Progress saved");
-      setChangedIds(new Set());
-      loadSubmissions(userId);
+      if (error) {
+        setSaveStatus({ message: error.message, tone: "error" });
+      } else {
+        setSaveStatus({ message: "Progress saved", tone: "success" });
+        setChangedIds(new Set());
+        loadSubmissions(userId);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to save progress";
+      setSaveStatus({ message, tone: "error" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -425,6 +441,8 @@ export default function DashboardPage() {
   };
 
   const activeTeamName = teams.find((t) => t.team?.id === activeTeamId)?.team?.name;
+  const hasChanges = changedIds.size > 0;
+  const saveDisabled = !hasChanges || isSaving;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -548,12 +566,29 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={handleSaveSubmissions}
-              className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg"
+              disabled={saveDisabled}
+              title={!hasChanges ? "No changes to save." : undefined}
+              className={`px-4 py-2 rounded-lg text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 ${
+                saveDisabled
+                  ? "bg-slate-700 text-slate-300 cursor-not-allowed opacity-80"
+                  : "bg-indigo-500 hover:bg-indigo-600"
+              }`}
             >
-              Save progress
+              {isSaving ? "Saving..." : "Save progress"}
             </button>
           </div>
-          {saveStatus && <p className="text-sm text-rose-400">{saveStatus}</p>}
+          {!hasChanges && <p className="text-xs text-slate-400">No changes to save.</p>}
+          {saveStatus && (
+            <div
+              className={`text-sm px-3 py-2 rounded-lg border w-fit ${
+                saveStatus.tone === "success"
+                  ? "bg-green-500/10 text-green-200 border-green-600/50"
+                  : "bg-rose-500/10 text-rose-200 border-rose-600/50"
+              }`}
+            >
+              {saveStatus.message}
+            </div>
+          )}
           <div className="space-y-3">
             {challenges.map((challenge) => {
               const checked = submissionState[challenge.id] || false;
