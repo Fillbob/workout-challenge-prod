@@ -14,6 +14,13 @@ interface Challenge {
   base_points: number;
 }
 
+interface AdminTeam {
+  id: string;
+  name: string;
+  join_code: string;
+  member_count?: number;
+}
+
 const emptyForm: Omit<Challenge, "id"> = {
   week_index: 1,
   title: "",
@@ -30,6 +37,9 @@ export default function AdminPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [teams, setTeams] = useState<AdminTeam[]>([]);
+  const [teamName, setTeamName] = useState("");
+  const [teamStatus, setTeamStatus] = useState<string | null>(null);
 
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
@@ -43,12 +53,35 @@ export default function AdminPage() {
     setChallenges(data ?? []);
   }, [supabase]);
 
+  const loadTeams = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("teams")
+      .select("id, name, join_code, team_members(count)")
+      .order("name", { ascending: true });
+
+    if (error) {
+      setTeamStatus(error.message);
+      return;
+    }
+
+    const normalized: AdminTeam[] = (data ?? []).map((team) => ({
+      id: team.id,
+      name: team.name,
+      join_code: team.join_code,
+      member_count: Array.isArray(team.team_members) ? team.team_members[0]?.count ?? 0 : undefined,
+    }));
+
+    setTeams(normalized);
+    setTeamStatus(null);
+  }, [supabase]);
+
   useRequireAdmin(() => setIsAuthed(true));
 
   useEffect(() => {
     if (!isAuthed) return;
     loadChallenges();
-  }, [isAuthed, loadChallenges]);
+    loadTeams();
+  }, [isAuthed, loadChallenges, loadTeams]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -90,6 +123,61 @@ export default function AdminPage() {
     loadChallenges();
   };
 
+  const handleCreateTeam = async () => {
+    setTeamStatus(null);
+    const trimmed = teamName.trim();
+
+    if (!trimmed) {
+      setTeamStatus("Team name is required");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/teams/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamName: trimmed }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to create team");
+      }
+
+      setTeamStatus("Team created");
+      setTeamName("");
+      loadTeams();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to create team";
+      setTeamStatus(message);
+    }
+  };
+
+  const handleDeleteTeam = async (id: string) => {
+    setTeamStatus(null);
+
+    try {
+      const response = await fetch("/api/teams/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: id }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to delete team");
+      }
+
+      setTeamStatus("Team deleted");
+      loadTeams();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete team";
+      setTeamStatus(message);
+    }
+  };
+
   const startEditing = (challenge: Challenge) => {
     setEditingId(challenge.id);
     setForm({
@@ -115,6 +203,62 @@ export default function AdminPage() {
           <a className="text-sm text-indigo-400 underline" href="/dashboard">
             Back to dashboard
           </a>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-indigo-400">Teams</p>
+              <h2 className="text-2xl font-semibold">Create and manage teams</h2>
+            </div>
+            {teamStatus && <p className="text-sm text-rose-400">{teamStatus}</p>}
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row">
+            <input
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              placeholder="Team name"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+            />
+            <button onClick={handleCreateTeam} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg">
+              Create team
+            </button>
+          </div>
+          <p className="text-sm text-slate-400">Join codes are shown below and can be shared with users.</p>
+
+          <div className="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800 text-slate-300">
+                <tr>
+                  <th className="p-3 text-left">Name</th>
+                  <th className="p-3 text-left">Join code</th>
+                  <th className="p-3 text-left">Members</th>
+                  <th className="p-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((team) => (
+                  <tr key={team.id} className="border-t border-slate-800">
+                    <td className="p-3">{team.name}</td>
+                    <td className="p-3 text-slate-300">{team.join_code}</td>
+                    <td className="p-3">{team.member_count ?? "-"}</td>
+                    <td className="p-3">
+                      <button onClick={() => handleDeleteTeam(team.id)} className="text-rose-400">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {teams.length === 0 && (
+                  <tr>
+                    <td className="p-3" colSpan={4}>
+                      <p className="text-slate-500">No teams created yet.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
