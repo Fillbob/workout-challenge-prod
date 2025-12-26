@@ -24,11 +24,11 @@ interface Submission {
 
 interface TeamRow {
   team_id: string;
-  teams: {
+  team: {
     id: string;
     name: string;
     join_code: string;
-  };
+  } | null;
 }
 
 export default function DashboardPage() {
@@ -75,7 +75,12 @@ export default function DashboardPage() {
       setTeamStatus(error.message);
       return;
     }
-    setTeams(data ?? []);
+    const normalizedTeams: TeamRow[] = (data ?? []).map((row: any) => ({
+      team_id: String(row.team_id),
+      team: Array.isArray(row.teams) && row.teams.length > 0 ? row.teams[0] : null,
+    }));
+
+    setTeams(normalizedTeams);
   }, [supabase]);
 
   const loadChallenges = useCallback(async () => {
@@ -212,7 +217,7 @@ export default function DashboardPage() {
     window.localStorage.setItem("activeTeamId", teamId);
   };
 
-  const activeTeamName = teams.find((t) => t.teams.id === activeTeamId)?.teams.name;
+  const activeTeamName = teams.find((t) => t.team?.id === activeTeamId)?.team?.name;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -293,25 +298,29 @@ export default function DashboardPage() {
                 <p className="text-sm text-slate-400">Your teams</p>
                 <div className="space-y-2">
                   {teams.length === 0 && <p className="text-slate-500">No teams yet</p>}
-                  {teams.map((row) => (
-                    <div
-                      key={row.teams.id}
-                      className={`flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg p-3 ${
-                        activeTeamId === row.teams.id ? "ring-2 ring-indigo-500" : ""
-                      }`}
-                    >
-                      <div>
-                        <p className="font-medium">{row.teams.name}</p>
-                        <p className="text-xs text-slate-400">Join code: {row.teams.join_code}</p>
-                      </div>
-                      <button
-                        onClick={() => handleActiveTeamChange(row.teams.id)}
-                        className="text-sm text-indigo-400"
+                  {teams.map((row) => {
+                    if (!row.team) return null;
+
+                    return (
+                      <div
+                        key={row.team.id}
+                        className={`flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg p-3 ${
+                          activeTeamId === row.team.id ? "ring-2 ring-indigo-500" : ""
+                        }`}
                       >
-                        {activeTeamId === row.teams.id ? "Active" : "Set active"}
-                      </button>
-                    </div>
-                  ))}
+                        <div>
+                          <p className="font-medium">{row.team.name}</p>
+                          <p className="text-xs text-slate-400">Join code: {row.team.join_code}</p>
+                        </div>
+                        <button
+                          onClick={() => handleActiveTeamChange(row.team!.id)}
+                          className="text-sm text-indigo-400"
+                        >
+                          {activeTeamId === row.team.id ? "Active" : "Set active"}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
