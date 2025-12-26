@@ -48,15 +48,23 @@ export default function LeaderboardPage() {
         throw new Error(payload.error || "Unable to load teams");
       }
 
-      setTeams(
-        (payload.teams ?? []).map((row: { team_id: string; teams?: { id: string; name: string }[] }) => ({
-          team_id: String(row.team_id),
-          teams: row.teams?.map((team) => ({
-            id: String(team.id),
-            name: String(team.name),
-          })) ?? [],
-        })),
+      const normalizedTeams: TeamRow[] = (payload.teams ?? []).map(
+        (row: { team_id: string; teams?: { id: string; name: string } | { id: string; name: string }[] }) => {
+          const nested = row.teams;
+          const parsedTeams = Array.isArray(nested)
+            ? nested.map((team) => ({ id: String(team.id), name: String(team.name) }))
+            : nested
+              ? [{ id: String(nested.id), name: String(nested.name) }]
+              : [];
+
+          return {
+            team_id: String(row.team_id),
+            teams: parsedTeams,
+          };
+        },
       );
+
+      setTeams(normalizedTeams);
       setStatus(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to load teams");
