@@ -21,15 +21,37 @@ export default function Home() {
     });
   }, [router, supabase]);
 
-  const ensureProfile = async (userId: string, displayName?: string) => {
-    await supabase
+  const ensureProfile = async (
+    user: { id: string; email?: string | null },
+    displayName?: string,
+  ) => {
+    const derivedName = (displayName || user.email?.split("@")[0] || "New athlete").trim();
+
+    const { data: existing, error } = await supabase
       .from("profiles")
-      .upsert({
-        id: userId,
-        display_name: displayName || email.split("@")[0],
-        role: "user",
-      })
-      .throwOnError();
+      .select("display_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!existing) {
+      await supabase
+        .from("profiles")
+        .insert({ id: user.id, display_name: derivedName, role: "user" })
+        .throwOnError();
+      return;
+    }
+
+    if (!existing.display_name) {
+      await supabase
+        .from("profiles")
+        .update({ display_name: derivedName })
+        .eq("id", user.id)
+        .throwOnError();
+    }
   };
 
   const handleAuth = async (event: FormEvent<HTMLFormElement>) => {
@@ -63,7 +85,7 @@ export default function Home() {
     }
 
     if (data.session?.user) {
-      await ensureProfile(data.session.user.id);
+      await ensureProfile(data.session.user);
       router.replace("/dashboard");
     }
   };
