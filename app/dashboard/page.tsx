@@ -84,7 +84,7 @@ export default function DashboardPage() {
       setTeamStatus(error.message);
       return;
     }
-    const normalizedTeams: TeamRow[] = (data ?? []).map((row: TeamMembersResult) => ({
+    const normalizedTeams: TeamRow[] = (data ?? []).map((row) => ({
       team_id: String(row.team_id),
       team: Array.isArray(row.teams) && row.teams.length > 0 ? row.teams[0] : null,
     }));
@@ -377,28 +377,49 @@ export default function DashboardPage() {
           </div>
           {saveStatus && <p className="text-sm text-rose-400">{saveStatus}</p>}
           <div className="space-y-3">
-            {challenges.map((challenge) => (
-              <div
-                key={challenge.id}
-                className="flex items-start gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4"
-              >
-                <input
-                  type="checkbox"
-                  checked={submissionState[challenge.id] || false}
-                  onChange={(e) => toggleChallenge(challenge.id, e.target.checked)}
-                  className="mt-1 h-5 w-5 accent-indigo-500"
-                />
-                <div className="space-y-1">
-                  <p className="text-sm text-slate-400">Week {challenge.week_index}</p>
-                  <h3 className="text-lg font-semibold">{challenge.title}</h3>
-                  <p className="text-slate-300 text-sm">{challenge.description}</p>
-                  <p className="text-xs text-slate-500">
-                    {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
-                    {challenge.end_date && `Ends ${challenge.end_date}`} · {challenge.base_points} pts
-                  </p>
+            {challenges.map((challenge) => {
+              const checked = submissionState[challenge.id] || false;
+
+              return (
+                <div
+                  key={challenge.id}
+                  className="flex items-start gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4"
+                >
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={checked}
+                    aria-label={`Mark ${challenge.title} as completed`}
+                    onClick={() => toggleChallenge(challenge.id, !checked)}
+                    onKeyDown={(event) => {
+                      if (event.key === " " || event.key === "Enter") {
+                        event.preventDefault();
+                        toggleChallenge(challenge.id, !checked);
+                      }
+                    }}
+                    className={`mt-1 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+                      checked ? "bg-indigo-500" : "bg-slate-600"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                        checked ? "translate-x-5" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-400">Week {challenge.week_index}</p>
+                    <h3 className="text-lg font-semibold">{challenge.title}</h3>
+                    <p className="text-slate-300 text-sm">{challenge.description}</p>
+                    <p className="text-xs text-slate-500">
+                      {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
+                      {challenge.end_date && `Ends ${challenge.end_date}`} · {challenge.base_points} pts
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
