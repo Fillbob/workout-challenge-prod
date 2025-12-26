@@ -4,17 +4,29 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_LIMIT = 25;
 
+type ChallengeRelation =
+  | { title?: string | null; base_points: number | null }
+  | { title?: string | null; base_points: number | null }[]
+  | null;
+
 type ContributionRow = {
   user_id: string;
   completed_at: string | null;
   challenge_id: string;
-  challenges: { title: string | null; base_points: number | null }[] | null;
+  challenges: ChallengeRelation;
 };
 
 type StatsRow = {
   user_id: string;
-  challenges: { base_points: number | null }[] | null;
+  challenges: ChallengeRelation;
 };
+
+function extractChallenge(relation: ChallengeRelation) {
+  if (Array.isArray(relation)) {
+    return relation[0];
+  }
+  return relation ?? undefined;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -94,9 +106,8 @@ export async function GET(request: Request) {
   const leaderboardTotals = new Map<string, { points: number; completed: number }>();
   (statsRows as StatsRow[] | null)?.forEach((row) => {
     const existing = leaderboardTotals.get(row.user_id) ?? { points: 0, completed: 0 };
-    const points = Array.isArray(row.challenges)
-      ? row.challenges[0]?.base_points ?? 0
-      : 0;
+    const challenge = extractChallenge(row.challenges);
+    const points = challenge?.base_points ?? 0;
     leaderboardTotals.set(row.user_id, {
       points: existing.points + points,
       completed: existing.completed + 1,
@@ -137,7 +148,7 @@ export async function GET(request: Request) {
     if (!contributions[row.user_id]) {
       contributions[row.user_id] = [];
     }
-    const challenge = Array.isArray(row.challenges) ? row.challenges[0] : undefined;
+    const challenge = extractChallenge(row.challenges);
     contributions[row.user_id].push({
       challenge_id: row.challenge_id,
       challenge_title: challenge?.title ?? "",
