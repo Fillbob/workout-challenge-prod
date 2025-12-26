@@ -405,6 +405,12 @@ export default function DashboardPage() {
     return map;
   }, [challenges, submissions]);
 
+  const totalPoints = useMemo(() => {
+    return challenges.reduce((sum, challenge) => {
+      return submissionState[challenge.id] ? sum + (challenge.base_points || 0) : sum;
+    }, 0);
+  }, [challenges, submissionState]);
+
   const toggleChallenge = (id: string, checked: boolean) => {
     setSubmissions((prev) => ({
       ...prev,
@@ -506,7 +512,9 @@ export default function DashboardPage() {
         <header className="flex items-center justify-between">
           <div>
             <p className="text-sm text-indigo-400">Dashboard</p>
-            <h1 className="text-3xl font-semibold">Welcome back</h1>
+            <h1 className="text-3xl font-semibold">
+              Welcome back{profileName ? `, ${profileName}` : ""}
+            </h1>
           </div>
           <button
             className="text-sm text-slate-300 underline"
@@ -519,11 +527,11 @@ export default function DashboardPage() {
           </button>
         </header>
 
-        <section className="grid md:grid-cols-2 gap-6">
+        <section className="grid gap-6 md:grid-cols-2">
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <h2 className="text-xl font-semibold">Profile</h2>
+                <h2 className="text-xl font-semibold">Display name</h2>
                 <div className="flex gap-2 text-xs text-slate-300">
                   {userIdentifier && <span className="px-2 py-1 rounded bg-slate-800">ID: {userIdentifier}</span>}
                   {profileRole && <span className="px-2 py-1 rounded bg-slate-800">Access: {profileRole}</span>}
@@ -538,77 +546,83 @@ export default function DashboardPage() {
                 onChange={(e) => setProfileName(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-              <button
-                onClick={handleProfileSave}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg"
-              >
-                Save name
-              </button>
             </div>
+            <button
+              onClick={handleProfileSave}
+              className="bg-indigo-500 hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg"
+            >
+              Save name
+            </button>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Teams</h2>
-              {teamStatus && <span className="text-sm text-rose-400">{teamStatus}</span>}
-            </div>
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="Team name"
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  onClick={handleCreateTeam}
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
-                >
-                  Create
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="Join code"
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  onClick={handleJoinTeam}
-                  className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg"
-                >
-                  Join
-                </button>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm text-slate-400">Your teams</p>
-                <div className="space-y-2">
-                  {teams.length === 0 && <p className="text-slate-500">No teams yet</p>}
-                  {teams.map((row) => {
-                    if (!row.team) return null;
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3">
+            <p className="text-sm text-indigo-400">Points</p>
+            <h2 className="text-3xl font-semibold">{totalPoints}</h2>
+            <p className="text-slate-300 text-sm">Points earned from completed challenges.</p>
+          </div>
+        </section>
 
-                    return (
-                      <div
-                        key={row.team.id}
-                        className={`flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg p-3 ${
-                          activeTeamId === row.team.id ? "ring-2 ring-indigo-500" : ""
-                        }`}
-                      >
-                        <div>
-                          <p className="font-medium">{row.team.name}</p>
-                          <p className="text-xs text-slate-400">Join code: {row.team.join_code}</p>
-                        </div>
-                        <button
-                          onClick={() => handleActiveTeamChange(row.team!.id)}
-                          className="text-sm text-indigo-400"
-                        >
-                          {activeTeamId === row.team.id ? "Active" : "Set active"}
-                        </button>
+        <section className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Teams</h2>
+            {teamStatus && <span className="text-sm text-rose-400">{teamStatus}</span>}
+          </div>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Team name"
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={handleCreateTeam}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg"
+              >
+                Create
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Join code"
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                onClick={handleJoinTeam}
+                className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg"
+              >
+                Join
+              </button>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-slate-400">Your teams</p>
+              <div className="space-y-2">
+                {teams.length === 0 && <p className="text-slate-500">No teams yet</p>}
+                {teams.map((row) => {
+                  if (!row.team) return null;
+
+                  return (
+                    <div
+                      key={row.team.id}
+                      className={`flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg p-3 ${
+                        activeTeamId === row.team.id ? "ring-2 ring-indigo-500" : ""
+                      }`}
+                    >
+                      <div>
+                        <p className="font-medium">{row.team.name}</p>
+                        <p className="text-xs text-slate-400">Join code: {row.team.join_code}</p>
                       </div>
-                    );
-                  })}
-                </div>
+                      <button
+                        onClick={() => handleActiveTeamChange(row.team!.id)}
+                        className="text-sm text-indigo-400"
+                      >
+                        {activeTeamId === row.team.id ? "Active" : "Set active"}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
