@@ -3,6 +3,24 @@ import { createClient } from "@/lib/supabase/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+const JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function createJoinCode(length = 6) {
+  return Array.from({ length })
+    .map(() => JOIN_CODE_CHARS.charAt(Math.floor(Math.random() * JOIN_CODE_CHARS.length)))
+    .join("");
+}
+
+async function generateUniqueJoinCode(admin: ReturnType<typeof getServiceRoleClient>) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = createJoinCode();
+    const { data } = await admin.from("teams").select("id").eq("join_code", candidate).maybeSingle();
+    if (!data) return candidate;
+  }
+
+  throw new Error("Unable to generate join code");
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const teamName: string | undefined = body.teamName;
@@ -32,9 +50,17 @@ export async function POST(request: Request) {
 
   const admin = getServiceRoleClient();
 
+  let joinCode: string;
+
+  try {
+    joinCode = await generateUniqueJoinCode(admin);
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+
   const { data: teamResult, error: teamError } = await admin
     .from("teams")
-    .insert({ name: teamName, join_code: teamName })
+    .insert({ name: teamName, join_code: joinCode })
     .select("id, name, join_code")
     .single();
 
