@@ -1,6 +1,7 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
+import { generateJoinCode, isValidJoinCode, normalizeJoinCode } from "@/lib/joinCodes";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -54,7 +55,7 @@ function readLocalTeams() {
       .map((team) => ({
         id: String(team.id ?? ""),
         name: String(team.name ?? ""),
-        join_code: String(team.join_code ?? ""),
+        join_code: normalizeJoinCode(team.join_code),
         owner_id: String(team.owner_id ?? ""),
         members: Array.isArray(team.members) ? team.members.map(String) : [],
       }))
@@ -77,9 +78,8 @@ function addLocalMembership(team: LocalTeam, userId: string) {
 
 function ensureLocalTeam(name: string, userId: string) {
   const teams = readLocalTeams();
-  const existing = teams.find(
-    (team) => team.name.toLowerCase() === name.toLowerCase() || team.join_code.toLowerCase() === name.toLowerCase(),
-  );
+  const normalizedCode = normalizeJoinCode(name);
+  const existing = teams.find((team) => team.name.toLowerCase() === name.toLowerCase() || team.join_code === normalizedCode);
 
   if (existing) {
     const updated = addLocalMembership(existing, userId);
@@ -91,7 +91,7 @@ function ensureLocalTeam(name: string, userId: string) {
   const newTeam: LocalTeam = {
     id: crypto.randomUUID(),
     name,
-    join_code: name,
+    join_code: generateJoinCode(),
     owner_id: userId,
     members: [userId],
   };
@@ -320,10 +320,15 @@ export default function DashboardPage() {
 
   const handleJoinTeam = async () => {
     setTeamStatus(null);
-    const trimmedCode = joinCode.trim();
+    const normalizedCode = normalizeJoinCode(joinCode);
 
-    if (!trimmedCode) {
+    if (!normalizedCode) {
       setTeamStatus("Join code is required");
+      return;
+    }
+
+    if (!isValidJoinCode(normalizedCode)) {
+      setTeamStatus("Join code must be 6-8 lowercase letters or numbers");
       return;
     }
 
@@ -331,7 +336,7 @@ export default function DashboardPage() {
       const response = await fetch("/api/teams/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ joinCode: trimmedCode }),
+        body: JSON.stringify({ joinCode: normalizedCode }),
       });
 
       const result = await response.json();
@@ -355,9 +360,7 @@ export default function DashboardPage() {
     }
 
     const local = readLocalTeams();
-    const target = local.find(
-      (team) => team.name.toLowerCase() === trimmedCode.toLowerCase() || team.join_code.toLowerCase() === trimmedCode.toLowerCase(),
-    );
+    const target = local.find((team) => team.join_code === normalizedCode);
 
     if (!target) {
       setTeamStatus("Team not found");
