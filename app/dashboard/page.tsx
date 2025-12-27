@@ -262,7 +262,6 @@ export default function DashboardPage() {
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [recentOffset, setRecentOffset] = useState(0);
   const [showClosedChallenges, setShowClosedChallenges] = useState(false);
-  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -556,15 +555,12 @@ export default function DashboardPage() {
   }, [activeTeamId, challenges, userTeamIds]);
 
   const { openChallenges, closedChallenges } = useMemo(() => {
-    if (!currentTime) {
-      return { openChallenges: visibleChallenges, closedChallenges: [] as Challenge[] };
-    }
-
+    const now = new Date();
     const open: Challenge[] = [];
     const closed: Challenge[] = [];
 
     visibleChallenges.forEach((challenge) => {
-      const closingInfo = getChallengeClosingInfo(challenge, currentTime);
+      const closingInfo = getChallengeClosingInfo(challenge, now);
       if (closingInfo.isEditable) {
         open.push(challenge);
       } else {
@@ -573,7 +569,7 @@ export default function DashboardPage() {
     });
 
     return { openChallenges: open, closedChallenges: closed };
-  }, [currentTime, visibleChallenges]);
+  }, [visibleChallenges]);
 
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -720,10 +716,9 @@ export default function DashboardPage() {
   };
 
   const nextClosing = useMemo(() => {
-    if (!currentTime) return null;
-
+    const now = new Date();
     const candidates = openChallenges
-      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge, currentTime) }))
+      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge, now) }))
       .filter(({ info }) => info.daysUntilClose !== null);
 
     if (candidates.length === 0) return null;
@@ -740,7 +735,7 @@ export default function DashboardPage() {
       lockDateLabel: nearest.info.lockDateLabel,
       closingLabel: nearest.info.closingLabel,
     };
-  }, [currentTime, openChallenges]);
+  }, [openChallenges]);
 
   const cardClass =
     "rounded-2xl border border-orange-100 bg-white/90 shadow-lg shadow-orange-100/60 backdrop-blur";
@@ -977,9 +972,7 @@ export default function DashboardPage() {
                   ) : (
                     closedChallenges.map((challenge) => {
                       const checked = submissionState[challenge.id] || false;
-                      const closingInfo = currentTime
-                        ? getChallengeClosingInfo(challenge, currentTime)
-                        : FALLBACK_CLOSING_INFO;
+                      const closingInfo = getChallengeClosingInfo(challenge);
 
                       return (
                         <div
