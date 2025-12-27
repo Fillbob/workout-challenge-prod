@@ -48,6 +48,11 @@ interface LocalTeam {
   members: string[];
 }
 
+interface WeeklyPoints {
+  week: number;
+  points: number;
+}
+
 const LOCAL_TEAM_STORAGE_KEY = "localTeams";
 
 function readLocalTeams() {
@@ -120,6 +125,64 @@ function mergeTeams(primary: TeamRow[], extras: TeamRow[]) {
   });
 
   return merged;
+}
+
+function LineChart({ data }: { data: WeeklyPoints[] }) {
+  if (data.length === 0) return null;
+
+  const width = 260;
+  const height = 120;
+  const padding = 12;
+  const maxPoints = Math.max(...data.map((entry) => entry.points));
+  const xStep = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
+
+  const coordinates = data.map((entry, index) => {
+    const x = padding + xStep * index;
+    const y =
+      height - padding - (maxPoints === 0 ? 0 : (entry.points / maxPoints) * (height - padding * 2));
+
+    return { ...entry, x, y };
+  });
+
+  const polylinePoints = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaPoints = `${padding},${height - padding} ${polylinePoints} ${
+    coordinates[coordinates.length - 1].x
+  },${height - padding}`;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Points earned by week">
+      <defs>
+        <linearGradient id="pointsGradient" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#818cf8" stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width={width} height={height} fill="transparent" rx="8" />
+      <polyline fill="url(#pointsGradient)" stroke="none" points={areaPoints} />
+      <polyline
+        points={polylinePoints}
+        fill="none"
+        stroke="#818cf8"
+        strokeWidth={2.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {coordinates.map((point) => (
+        <g key={point.week}>
+          <circle cx={point.x} cy={point.y} r={4} fill="#c7d2fe" stroke="#4f46e5" strokeWidth={1.5} />
+          <text
+            x={point.x}
+            y={height - 2}
+            textAnchor="middle"
+            className="fill-slate-400"
+            fontSize={10}
+          >
+            W{point.week}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
 }
 
 export default function DashboardPage() {
@@ -420,6 +483,19 @@ export default function DashboardPage() {
     }, 0);
   }, [challenges, submissionState]);
 
+  const weeklyPoints = useMemo(() => {
+    const totals: Record<number, number> = {};
+
+    challenges.forEach((challenge) => {
+      if (!submissionState[challenge.id]) return;
+      totals[challenge.week_index] = (totals[challenge.week_index] || 0) + (challenge.base_points || 0);
+    });
+
+    return Object.entries(totals)
+      .map<WeeklyPoints>(([week, points]) => ({ week: Number(week), points }))
+      .sort((a, b) => a.week - b.week);
+  }, [challenges, submissionState]);
+
   const toggleChallenge = (id: string, checked: boolean) => {
     setSubmissions((prev) => ({
       ...prev,
@@ -563,6 +639,28 @@ export default function DashboardPage() {
             <p className="text-sm text-indigo-400">Points</p>
             <h2 className="text-3xl font-semibold">{totalPoints}</h2>
             <p className="text-slate-300 text-sm">Points earned from completed challenges.</p>
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>Points by week</span>
+                {weeklyPoints.length > 0 && <span>Max: {Math.max(...weeklyPoints.map((entry) => entry.points))}</span>}
+              </div>
+              <div className="h-32 w-full rounded-lg bg-slate-800/70 border border-slate-700 p-3">
+                {weeklyPoints.length === 0 ? (
+                  <p className="text-slate-500 text-sm">Complete challenges to see your trend.</p>
+                ) : (
+                  <LineChart data={weeklyPoints} />
+                )}
+              </div>
+              {weeklyPoints.length > 0 && (
+                <div className="flex flex-wrap gap-2 text-xs text-slate-400">
+                  {weeklyPoints.map((entry) => (
+                    <span key={entry.week} className="px-2 py-1 rounded bg-slate-800 border border-slate-700">
+                      Week {entry.week}: {entry.points} pts
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
