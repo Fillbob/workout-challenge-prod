@@ -33,5 +33,5 @@ export function getDashboardUrl() {
 }
 
 export function getLoginUrl() {
-  return `${getSiteUrl()}/auth/login`;
+  return "https://workout-challenge-prod.vercel.app/";
 }

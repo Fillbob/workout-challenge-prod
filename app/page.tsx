@@ -95,67 +95,115 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-black p-6">
-      <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl space-y-8">
-        <div className="space-y-2">
-          <p className="text-sm uppercase tracking-[0.3em] text-indigo-400">Workout Challenge</p>
-          <h1 className="text-3xl font-semibold text-white">Compete. Collaborate. Grow stronger.</h1>
-          <p className="text-slate-400">
-            Log in or create an account to join teams, tackle weekly challenges, and climb the leaderboard.
+    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50 px-6 py-16 text-slate-900">
+      <div className="pointer-events-none absolute inset-0 opacity-60">
+        <div className="absolute -left-10 top-10 h-64 w-64 rounded-full bg-amber-200 blur-3xl" />
+        <div className="absolute bottom-10 right-0 h-72 w-72 rounded-full bg-orange-100 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-12">
+        <div className="hidden max-w-xl flex-1 flex-col gap-4 lg:flex">
+          <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800 shadow-sm shadow-amber-200">
+            Workout Challenge
+          </span>
+          <h1 className="text-4xl font-semibold leading-tight text-slate-900">
+            Compete. Collaborate. Grow stronger.
+          </h1>
+          <p className="text-lg text-slate-600">
+            Log in or create an account to join teams, tackle weekly challenges, and climb the leaderboard with your crew.
           </p>
+          <ul className="mt-4 space-y-2 text-slate-700">
+            <li className="flex items-start gap-3">
+              <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-sm font-semibold text-white">
+                1
+              </span>
+              <span>Track weekly workouts and stay accountable.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-sm font-semibold text-white">
+                2
+              </span>
+              <span>Earn points for your team and climb the leaderboard.</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-sm font-semibold text-white">
+                3
+              </span>
+              <span>Celebrate milestones together and keep the momentum going.</span>
+            </li>
+          </ul>
         </div>
 
-        <div className="flex gap-3 text-sm font-medium bg-slate-800 rounded-lg p-1">
-          <button
-            className={`flex-1 py-2 rounded-md transition ${
-              mode === "login" ? "bg-indigo-500 text-white" : "text-slate-300"
-            }`}
-            onClick={() => setMode("login")}
-          >
-            Log in
-          </button>
-          <button
-            className={`flex-1 py-2 rounded-md transition ${
-              mode === "signup" ? "bg-indigo-500 text-white" : "text-slate-300"
-            }`}
-            onClick={() => setMode("signup")}
-          >
-            Sign up
-          </button>
-        </div>
-
-        <form className="space-y-4" onSubmit={handleAuth}>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="you@example.com"
-            />
+        <div className="w-full max-w-xl flex-1 rounded-3xl border border-amber-100 bg-white/80 p-8 shadow-2xl shadow-amber-100 backdrop-blur">
+          <div className="space-y-3 text-left lg:hidden">
+            <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-amber-800">
+              Workout Challenge
+            </span>
+            <h1 className="text-3xl font-semibold text-slate-900">Welcome back</h1>
+            <p className="text-slate-600">
+              Log in or create an account to join teams, tackle weekly challenges, and climb the leaderboard with your crew.
+            </p>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="••••••••"
-            />
-          </div>
-          {status && <p className="text-sm text-rose-400">{status}</p>}
-          <button
-            type="submit"
-            className="w-full bg-indigo-500 hover:bg-indigo-600 transition text-white font-semibold rounded-lg py-3"
-          >
-            {mode === "login" ? "Continue" : "Create account"}
-          </button>
-        </form>
 
-        <div className="text-slate-400 text-sm">
-          Need to reset your password? <Link className="text-indigo-400" href="/auth/forgot-password">Reset here</Link>
+          <div className="mt-6 flex gap-2 rounded-2xl bg-amber-50 p-1 text-sm font-semibold text-amber-800 ring-1 ring-amber-100">
+            <button
+              className={`flex-1 rounded-xl px-4 py-3 transition ${
+                mode === "login" ? "bg-white text-slate-900 shadow" : "text-amber-700"
+              }`}
+              onClick={() => setMode("login")}
+              type="button"
+              aria-pressed={mode === "login"}
+            >
+              Log in
+            </button>
+            <button
+              className={`flex-1 rounded-xl px-4 py-3 transition ${
+                mode === "signup" ? "bg-white text-slate-900 shadow" : "text-amber-700"
+              }`}
+              onClick={() => setMode("signup")}
+              type="button"
+              aria-pressed={mode === "signup"}
+            >
+              Sign up
+            </button>
+          </div>
+
+          <form className="mt-6 space-y-5" onSubmit={handleAuth}>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl border border-amber-100 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+                placeholder="you@example.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-amber-100 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+                placeholder="••••••••"
+              />
+            </div>
+            {status && <p className="rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-600">{status}</p>}
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-amber-200 transition hover:bg-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-200"
+            >
+              {mode === "login" ? "Continue" : "Create account"}
+            </button>
+          </form>
+
+          <div className="mt-6 text-sm text-slate-600">
+            Need to reset your password? {" "}
+            <Link className="font-semibold text-amber-700 underline underline-offset-4" href="/auth/forgot-password">
+              Reset here
+            </Link>
+          </div>
         </div>
       </div>
     </main>
