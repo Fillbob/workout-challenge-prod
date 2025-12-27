@@ -720,9 +720,10 @@ export default function DashboardPage() {
   };
 
   const nextClosing = useMemo(() => {
-    const now = new Date();
+    if (!currentTime) return null;
+
     const candidates = openChallenges
-      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge, now) }))
+      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge, currentTime) }))
       .filter(({ info }) => info.daysUntilClose !== null);
 
     if (candidates.length === 0) return null;
@@ -739,7 +740,7 @@ export default function DashboardPage() {
       lockDateLabel: nearest.info.lockDateLabel,
       closingLabel: nearest.info.closingLabel,
     };
-  }, [openChallenges]);
+  }, [currentTime, openChallenges]);
 
   const cardClass =
     "rounded-2xl border border-orange-100 bg-white/90 shadow-lg shadow-orange-100/60 backdrop-blur";
