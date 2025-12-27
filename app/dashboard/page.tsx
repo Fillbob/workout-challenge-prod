@@ -7,11 +7,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 interface Challenge {
   id: string;
   week_index: number;
+  challenge_index: number;
   title: string;
   description: string;
   start_date: string | null;
   end_date: string | null;
   base_points: number;
+  team_ids: string[] | null;
 }
 
 interface Submission {
@@ -288,12 +290,22 @@ export default function DashboardPage() {
     const { data, error } = await supabase
       .from("challenges")
       .select("*")
-      .order("week_index", { ascending: true });
+      .order("week_index", { ascending: true })
+      .order("challenge_index", { ascending: true });
     if (error) {
       setSaveStatus({ message: error.message, tone: "error" });
       return;
     }
-    setChallenges(data ?? []);
+    const normalized = (data ?? []).map((challenge) => {
+      const parsedIndex = Number(challenge.challenge_index);
+
+      return {
+        ...challenge,
+        challenge_index: Number.isFinite(parsedIndex) ? parsedIndex : 1,
+        team_ids: challenge.team_ids ?? [],
+      };
+    });
+    setChallenges(normalized as Challenge[]);
   }, [supabase]);
 
   const loadSubmissions = useCallback(
@@ -469,24 +481,39 @@ export default function DashboardPage() {
     setTeamStatus(leftServer ? "Left team" : "Left team locally");
   };
 
+  const userTeamIds = useMemo(() => {
+    return teams
+      .map((team) => team.team?.id ?? team.team_id)
+      .filter((id): id is string => Boolean(id));
+  }, [teams]);
+
+  const visibleChallenges = useMemo(() => {
+    return challenges.filter((challenge) => {
+      const allowedTeams = challenge.team_ids ?? [];
+      if (allowedTeams.length === 0) return true;
+      if (activeTeamId) return allowedTeams.includes(activeTeamId);
+      return allowedTeams.some((teamId) => userTeamIds.includes(teamId));
+    });
+  }, [activeTeamId, challenges, userTeamIds]);
+
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
-    challenges.forEach((c) => {
+    visibleChallenges.forEach((c) => {
       map[c.id] = submissions[c.id]?.completed ?? false;
     });
     return map;
-  }, [challenges, submissions]);
+  }, [submissions, visibleChallenges]);
 
   const totalPoints = useMemo(() => {
-    return challenges.reduce((sum, challenge) => {
+    return visibleChallenges.reduce((sum, challenge) => {
       return submissionState[challenge.id] ? sum + (challenge.base_points || 0) : sum;
     }, 0);
-  }, [challenges, submissionState]);
+  }, [submissionState, visibleChallenges]);
 
   const weeklyPoints = useMemo(() => {
     const totals: Record<number, number> = {};
 
-    challenges.forEach((challenge) => {
+    visibleChallenges.forEach((challenge) => {
       if (!submissionState[challenge.id]) return;
       totals[challenge.week_index] = (totals[challenge.week_index] || 0) + (challenge.base_points || 0);
     });
@@ -494,7 +521,7 @@ export default function DashboardPage() {
     return Object.entries(totals)
       .map<WeeklyPoints>(([week, points]) => ({ week: Number(week), points }))
       .sort((a, b) => a.week - b.week);
-  }, [challenges, submissionState]);
+  }, [submissionState, visibleChallenges]);
 
   const toggleChallenge = (id: string, checked: boolean) => {
     setSubmissions((prev) => ({
@@ -756,7 +783,12 @@ export default function DashboardPage() {
             </div>
           )}
           <div className="space-y-3">
-            {challenges.map((challenge) => {
+            {visibleChallenges.length === 0 && (
+              <p className="text-slate-500 text-sm">
+                No challenges available for your selected team yet.
+              </p>
+            )}
+            {visibleChallenges.map((challenge) => {
               const checked = submissionState[challenge.id] || false;
 
               return (
@@ -788,7 +820,9 @@ export default function DashboardPage() {
                     />
                   </button>
                   <div className="space-y-1">
-                    <p className="text-sm text-slate-400">Week {challenge.week_index}</p>
+                    <p className="text-sm text-slate-400">
+                      Week {challenge.week_index} · Challenge {challenge.challenge_index}
+                    </p>
                     <h3 className="text-lg font-semibold">{challenge.title}</h3>
                     <p className="text-slate-300 text-sm">{challenge.description}</p>
                     <p className="text-xs text-slate-500">

@@ -93,10 +93,41 @@ export async function GET(request: Request) {
     nameMap.set(profile.id, profile.display_name ?? "Member");
   });
 
+  const { data: challengeRows, error: challengeError } = await admin
+    .from("challenges")
+    .select("id, team_ids");
+
+  if (challengeError) {
+    return NextResponse.json({ error: challengeError.message }, { status: 400 });
+  }
+
+  const allowedChallengeIds = (challengeRows ?? [])
+    .filter(
+      (challenge) =>
+        !challenge.team_ids ||
+        challenge.team_ids.length === 0 ||
+        (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId)),
+    )
+    .map((challenge) => challenge.id);
+
+  const baseLeaderboard = memberIds
+    .map((id) => ({
+      user_id: id,
+      name: nameMap.get(id) ?? "Member",
+      points: 0,
+      completed_count: 0,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (allowedChallengeIds.length === 0) {
+    return NextResponse.json({ leaderboard: baseLeaderboard, contributions: {}, hasMore: false, total: 0 });
+  }
+
   const { data: statsRows, error: statsError } = await admin
     .from("submissions")
     .select("user_id, challenges(base_points)")
     .in("user_id", memberIds)
+    .in("challenge_id", allowedChallengeIds)
     .eq("completed", true);
 
   if (statsError) {
@@ -128,6 +159,7 @@ export async function GET(request: Request) {
     .select("user_id, completed_at, challenge_id, challenges(title, base_points)", { count: "exact" })
     .in("user_id", memberIds)
     .eq("completed", true)
+    .in("challenge_id", allowedChallengeIds)
     .order("completed_at", { ascending: false })
     .range(offset, offset + (Number.isNaN(limit) ? DEFAULT_LIMIT : limit) - 1);
 

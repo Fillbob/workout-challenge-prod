@@ -7,11 +7,13 @@ import { useCallback, useEffect, useState } from "react";
 interface Challenge {
   id: string;
   week_index: number;
+  challenge_index: number;
   title: string;
   description: string;
   start_date: string | null;
   end_date: string | null;
   base_points: number;
+  team_ids: string[] | null;
 }
 
 interface AdminTeam {
@@ -24,11 +26,13 @@ interface AdminTeam {
 
 const emptyForm: Omit<Challenge, "id"> = {
   week_index: 1,
+  challenge_index: 1,
   title: "",
   description: "",
   start_date: null,
   end_date: null,
   base_points: 10,
+  team_ids: [],
 };
 
 export default function AdminPage() {
@@ -46,12 +50,20 @@ export default function AdminPage() {
     const { data, error } = await supabase
       .from("challenges")
       .select("*")
-      .order("week_index");
+      .order("week_index")
+      .order("challenge_index");
     if (error) {
       setStatus(error.message);
       return;
     }
-    setChallenges(data ?? []);
+    const normalized = (data ?? []).map((challenge) => ({
+      ...challenge,
+      challenge_index: Number.isFinite(Number(challenge.challenge_index))
+        ? Number(challenge.challenge_index)
+        : 1,
+      team_ids: challenge.team_ids ?? [],
+    }));
+    setChallenges(normalized as Challenge[]);
   }, [setChallenges, setStatus, supabase]);
 
   const loadTeams = useCallback(async () => {
@@ -202,11 +214,24 @@ export default function AdminPage() {
     setEditingId(challenge.id);
     setForm({
       week_index: challenge.week_index,
+      challenge_index: challenge.challenge_index ?? 1,
       title: challenge.title,
       description: challenge.description,
       start_date: challenge.start_date,
       end_date: challenge.end_date,
       base_points: challenge.base_points,
+      team_ids: challenge.team_ids ?? [],
+    });
+  };
+
+  const toggleTeamSelection = (teamId: string) => {
+    setForm((prev) => {
+      const existing = prev.team_ids ?? [];
+      const nextTeams = existing.includes(teamId)
+        ? existing.filter((id) => id !== teamId)
+        : [...existing, teamId];
+
+      return { ...prev, team_ids: nextTeams };
     });
   };
 
@@ -311,6 +336,15 @@ export default function AdminPage() {
               />
             </label>
             <label className="space-y-2 text-sm">
+              <span className="text-slate-300">Challenge index</span>
+              <input
+                type="number"
+                value={form.challenge_index}
+                onChange={(e) => setForm({ ...form, challenge_index: Number(e.target.value) })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+              />
+            </label>
+            <label className="space-y-2 text-sm">
               <span className="text-slate-300">Base points</span>
               <input
                 type="number"
@@ -357,6 +391,37 @@ export default function AdminPage() {
               />
             </label>
           </div>
+          <div className="space-y-2">
+            <p className="text-sm text-slate-300">Limit to teams (optional)</p>
+            <p className="text-xs text-slate-500">
+              Leave empty to make the challenge available to every team. Select one or more teams to
+              restrict it.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {teams.map((team) => {
+                const selected = (form.team_ids ?? []).includes(team.id);
+                return (
+                  <label
+                    key={team.id}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                      selected ? "border-indigo-500 bg-indigo-500/10" : "border-slate-700 bg-slate-800"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleTeamSelection(team.id)}
+                      className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-indigo-500"
+                    />
+                    <span className="text-slate-200">{team.name}</span>
+                  </label>
+                );
+              })}
+              {teams.length === 0 && (
+                <p className="text-sm text-slate-500">Create a team to restrict challenges.</p>
+              )}
+            </div>
+          </div>
           {status && <p className="text-sm text-rose-400">{status}</p>}
           <div className="flex gap-3">
             <button
@@ -378,7 +443,9 @@ export default function AdminPage() {
             <thead className="bg-slate-800 text-slate-300">
               <tr>
                 <th className="p-3 text-left">Week</th>
+                <th className="p-3 text-left">Challenge #</th>
                 <th className="p-3 text-left">Title</th>
+                <th className="p-3 text-left">Teams</th>
                 <th className="p-3 text-left">Points</th>
                 <th className="p-3 text-left">Actions</th>
               </tr>
@@ -387,7 +454,15 @@ export default function AdminPage() {
               {challenges.map((challenge) => (
                 <tr key={challenge.id} className="border-t border-slate-800">
                   <td className="p-3">{challenge.week_index}</td>
+                  <td className="p-3">{challenge.challenge_index}</td>
                   <td className="p-3">{challenge.title}</td>
+                  <td className="p-3 text-slate-300">
+                    {challenge.team_ids?.length
+                      ? challenge.team_ids
+                          .map((id) => teams.find((team) => team.id === id)?.name ?? id)
+                          .join(", ")
+                      : "All teams"}
+                  </td>
                   <td className="p-3">{challenge.base_points}</td>
                   <td className="p-3 flex gap-3">
                     <button
@@ -405,13 +480,13 @@ export default function AdminPage() {
                   </td>
                 </tr>
               ))}
-              {challenges.length === 0 && (
-                <tr>
-                  <td className="p-3" colSpan={4}>
-                    <p className="text-slate-500">No challenges created yet.</p>
-                  </td>
-                </tr>
-              )}
+                {challenges.length === 0 && (
+                  <tr>
+                    <td className="p-3" colSpan={6}>
+                      <p className="text-slate-500">No challenges created yet.</p>
+                    </td>
+                  </tr>
+                )}
             </tbody>
           </table>
         </div>
