@@ -59,9 +59,10 @@ export default function AdminPage() {
       .select("id, name, join_code")
       .order("name", { ascending: true });
 
-    try {
-      const response = await fetch("/api/admin/teams");
-      const result = await response.json();
+    if (error) {
+      setTeamStatus(error.message);
+      return;
+    }
 
     try {
       const teamsWithCounts: AdminTeam[] = await Promise.all(
