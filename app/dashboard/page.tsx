@@ -973,7 +973,9 @@ export default function DashboardPage() {
                   ) : (
                     closedChallenges.map((challenge) => {
                       const checked = submissionState[challenge.id] || false;
-                      const closingInfo = getChallengeClosingInfo(challenge);
+                      const closingInfo = currentTime
+                        ? getChallengeClosingInfo(challenge, currentTime)
+                        : FALLBACK_CLOSING_INFO;
 
                       return (
                         <div
