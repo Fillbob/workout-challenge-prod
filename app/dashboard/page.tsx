@@ -556,12 +556,15 @@ export default function DashboardPage() {
   }, [activeTeamId, challenges, userTeamIds]);
 
   const { openChallenges, closedChallenges } = useMemo(() => {
-    const now = new Date();
+    if (!currentTime) {
+      return { openChallenges: visibleChallenges, closedChallenges: [] };
+    }
+
     const open: Challenge[] = [];
     const closed: Challenge[] = [];
 
     visibleChallenges.forEach((challenge) => {
-      const closingInfo = getChallengeClosingInfo(challenge, now);
+      const closingInfo = getChallengeClosingInfo(challenge, currentTime);
       if (closingInfo.isEditable) {
         open.push(challenge);
       } else {
@@ -570,7 +573,7 @@ export default function DashboardPage() {
     });
 
     return { openChallenges: open, closedChallenges: closed };
-  }, [visibleChallenges]);
+  }, [currentTime, visibleChallenges]);
 
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
