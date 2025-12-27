@@ -1,6 +1,6 @@
 "use client";
 
-import { cn, getDashboardUrl } from "@/lib/utils";
+import { cn, getLoginUrl } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +44,7 @@ export function SignUpForm({
         email,
         password,
         options: {
-          emailRedirectTo: getDashboardUrl(),
+          emailRedirectTo: getLoginUrl(),
         },
       });
       if (error) throw error;
