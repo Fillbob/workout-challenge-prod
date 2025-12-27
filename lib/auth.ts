@@ -42,7 +42,7 @@ export function useRequireAdmin(
         .eq("id", session.user.id)
         .single();
 
-      if (profile?.role !== "admin") {
+      if (profile?.role !== "admin" && profile?.role !== "mod") {
         router.replace("/dashboard");
         return;
       }
