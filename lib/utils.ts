@@ -10,17 +10,28 @@ export const hasEnvVars =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export function getSiteUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL;
+  const url =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    process.env.VERCEL_URL;
+
+  if (url) {
+    return url.startsWith("http") ? url : `https://${url}`;
   }
 
   if (typeof window !== "undefined") {
     return window.location.origin;
   }
 
-  return "https://workout-challenge-prod.vercel.app";
+  return process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : "https://workout-challenge-prod.vercel.app";
 }
 
 export function getDashboardUrl() {
   return `${getSiteUrl()}/dashboard`;
+}
+
+export function getLoginUrl() {
+  return `${getSiteUrl()}/auth/login`;
 }

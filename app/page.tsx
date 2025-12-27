@@ -1,7 +1,7 @@
 "use client";
 
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { getDashboardUrl } from "@/lib/utils";
+import { getLoginUrl } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -69,7 +69,7 @@ export default function Home() {
         email,
         password,
         options: {
-          emailRedirectTo: getDashboardUrl(),
+          emailRedirectTo: getLoginUrl(),
         },
       });
       if (error) {

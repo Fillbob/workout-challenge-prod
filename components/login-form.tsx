@@ -49,10 +49,10 @@ export function LoginForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
+      <Card className="border-slate-800 bg-slate-900/80 text-white backdrop-blur">
         <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-2xl text-white">Login</CardTitle>
+          <CardDescription className="text-slate-300">
             Enter your email below to login to your account
           </CardDescription>
         </CardHeader>
@@ -60,7 +60,9 @@ export function LoginForm({
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-slate-200">
+                  Email
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -72,10 +74,12 @@ export function LoginForm({
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password" className="text-slate-200">
+                    Password
+                  </Label>
                   <Link
                     href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                    className="ml-auto inline-block text-sm text-amber-300 underline-offset-4 transition hover:text-amber-200 hover:underline"
                   >
                     Forgot your password?
                   </Link>
@@ -89,7 +93,11 @@ export function LoginForm({
                 />
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="w-full bg-indigo-500 text-white transition hover:bg-indigo-400"
+                disabled={isLoading}
+              >
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </div>
@@ -97,7 +105,7 @@ export function LoginForm({
               Don&apos;t have an account?{" "}
               <Link
                 href="/auth/sign-up"
-                className="underline underline-offset-4"
+                className="text-amber-300 underline underline-offset-4 transition hover:text-amber-200"
               >
                 Sign up
               </Link>
