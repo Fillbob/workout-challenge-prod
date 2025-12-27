@@ -54,22 +54,44 @@ export default function AdminPage() {
   }, [setChallenges, setStatus, supabase]);
 
   const loadTeams = useCallback(async () => {
-    setTeamStatus(null);
+    const { data, error } = await supabase
+      .from("teams")
+      .select("id, name, join_code")
+      .order("name", { ascending: true });
 
     try {
       const response = await fetch("/api/admin/teams");
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || "Unable to load teams");
-      }
+    try {
+      const teamsWithCounts: AdminTeam[] = await Promise.all(
+        (data ?? []).map(async (team) => {
+          const { count, error: countError } = await supabase
+            .from("team_members")
+            .select("id", { count: "exact", head: true })
+            .eq("team_id", team.id);
 
-      setTeams(result.teams ?? []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load teams";
+          if (countError) {
+            throw countError;
+          }
+
+          return {
+            id: team.id,
+            name: team.name,
+            join_code: team.join_code,
+            member_count: count ?? 0,
+          };
+        })
+      );
+
+      setTeams(teamsWithCounts);
+      setTeamStatus(null);
+    } catch (countError) {
+      const message =
+        countError instanceof Error ? countError.message : "Unable to load team members";
       setTeamStatus(message);
     }
-  }, [setTeamStatus, setTeams]);
+  }, [supabase]);
 
   useRequireAdmin(() => setIsAuthed(true));
 
