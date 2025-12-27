@@ -18,7 +18,8 @@ interface AdminTeam {
   id: string;
   name: string;
   join_code: string;
-  member_count?: number;
+  member_count: number;
+  members: { user_id: string; display_name: string }[];
 }
 
 const emptyForm: Omit<Challenge, "id"> = {
@@ -54,45 +55,21 @@ export default function AdminPage() {
   }, [setChallenges, setStatus, supabase]);
 
   const loadTeams = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("teams")
-      .select("id, name, join_code")
-      .order("name", { ascending: true });
-
-    if (error) {
-      setTeamStatus(error.message);
-      return;
-    }
-
     try {
-      const teamsWithCounts: AdminTeam[] = await Promise.all(
-        (data ?? []).map(async (team) => {
-          const { count, error: countError } = await supabase
-            .from("team_members")
-            .select("id", { count: "exact", head: true })
-            .eq("team_id", team.id);
+      const response = await fetch("/api/admin/teams");
+      const result = await response.json();
 
-          if (countError) {
-            throw countError;
-          }
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to load teams");
+      }
 
-          return {
-            id: team.id,
-            name: team.name,
-            join_code: team.join_code,
-            member_count: count ?? 0,
-          };
-        })
-      );
-
-      setTeams(teamsWithCounts);
+      setTeams(result.teams ?? []);
       setTeamStatus(null);
-    } catch (countError) {
-      const message =
-        countError instanceof Error ? countError.message : "Unable to load team members";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load teams";
       setTeamStatus(message);
     }
-  }, [supabase]);
+  }, []);
 
   useRequireAdmin(() => setIsAuthed(true));
 
@@ -197,6 +174,30 @@ export default function AdminPage() {
     }
   };
 
+  const handleRemoveMember = async (teamId: string, userId: string) => {
+    setTeamStatus(null);
+
+    try {
+      const response = await fetch("/api/admin/teams/remove-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId, userId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to remove member");
+      }
+
+      setTeamStatus("Member removed");
+      loadTeams();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to remove member";
+      setTeamStatus(message);
+    }
+  };
+
   const startEditing = (challenge: Challenge) => {
     setEditingId(challenge.id);
     setForm({
@@ -260,7 +261,25 @@ export default function AdminPage() {
                   <tr key={team.id} className="border-t border-slate-800">
                     <td className="p-3">{team.name}</td>
                     <td className="p-3 text-slate-300">{team.join_code}</td>
-                    <td className="p-3">{team.member_count ?? "-"}</td>
+                    <td className="p-3 space-y-2">
+                      <p className="text-slate-300">{team.member_count} member(s)</p>
+                      <ul className="space-y-1">
+                        {team.members.map((member) => (
+                          <li key={member.user_id} className="flex items-center justify-between gap-2">
+                            <span className="text-slate-200">{member.display_name}</span>
+                            <button
+                              onClick={() => handleRemoveMember(team.id, member.user_id)}
+                              className="text-rose-400 text-xs"
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                        {team.members.length === 0 && (
+                          <li className="text-slate-500">No members</li>
+                        )}
+                      </ul>
+                    </td>
                     <td className="p-3">
                       <button onClick={() => handleDeleteTeam(team.id)} className="text-rose-400">
                         Delete
