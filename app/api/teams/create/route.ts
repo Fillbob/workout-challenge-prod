@@ -60,7 +60,7 @@ export async function POST(request: Request) {
 
   const { data: teamResult, error: teamError } = await admin
     .from("teams")
-    .insert({ name: teamName, join_code: joinCode })
+    .insert({ name: teamName, join_code: joinCode, created_by: user.id })
     .select("id, name, join_code")
     .single();
 

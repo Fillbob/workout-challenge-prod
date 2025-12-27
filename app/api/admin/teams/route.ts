@@ -26,7 +26,7 @@ export async function GET() {
 
   const { data: teams, error: teamError } = await admin
     .from("teams")
-    .select("id, name, join_code")
+    .select("id, name, join_code, team_members(user_id, profiles(display_name))")
     .order("name", { ascending: true });
 
   if (teamError) {
@@ -36,18 +36,24 @@ export async function GET() {
   try {
     const teamsWithCounts = await Promise.all(
       (teams ?? []).map(async (team) => {
-        const { count, error: countError } = await admin
-          .from("team_members")
-          .select("id", { count: "exact", head: true })
-          .eq("team_id", team.id);
+        const members =
+          team.team_members?.map((member) => {
+            const profile = Array.isArray(member.profiles)
+              ? member.profiles[0]
+              : member.profiles;
 
-        if (countError) {
-          throw countError;
-        }
+            return {
+              user_id: member.user_id,
+              display_name: profile?.display_name ?? "Member",
+            };
+          }) ?? [];
 
         return {
-          ...team,
-          member_count: count ?? 0,
+          id: team.id,
+          name: team.name,
+          join_code: team.join_code,
+          members,
+          member_count: members.length,
         };
       }),
     );
