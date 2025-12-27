@@ -51,7 +51,7 @@ export default function AdminPage() {
       return;
     }
     setChallenges(data ?? []);
-  }, [supabase]);
+  }, [setChallenges, setStatus, supabase]);
 
   const loadTeams = useCallback(async () => {
     const { data, error } = await supabase
