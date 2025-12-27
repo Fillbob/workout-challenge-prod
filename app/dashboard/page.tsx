@@ -282,8 +282,6 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
-  const [highlightAnnouncementId, setHighlightAnnouncementId] = useState<string | null>(null);
-  const [showAnnouncementPopup, setShowAnnouncementPopup] = useState(true);
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState<string | null>(null);
@@ -422,45 +420,34 @@ export default function DashboardPage() {
 
       setAnnouncements(payload.announcements ?? []);
       setAnnouncementStatus(null);
-      if (payload.announcements?.[0]?.id) {
-        setHighlightAnnouncementId(payload.announcements[0].id);
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load announcements";
       setAnnouncementStatus(message);
     }
   }, []);
 
-  const loadTeamMessages = useCallback(
-    async (teamId: string | null) => {
-      if (!teamId) {
-        setTeamMessages([]);
-        setChatLoading(false);
-        setChatStatus(null);
+  const loadTeamMessages = useCallback(async (teamId: string | null) => {
+    if (!teamId) {
+      setTeamMessages([]);
+      setChatLoading(false);
+      return;
+    }
+
+    setChatLoading(true);
+
+    try {
+      const response = await fetch(`/api/teams/chat?teamId=${encodeURIComponent(teamId)}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
         return;
       }
 
-      setChatLoading(true);
-      setChatStatus(null);
-
-      try {
-        const response = await fetch(`/api/teams/chat?teamId=${encodeURIComponent(teamId)}`);
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Unable to load chat");
-        }
-
-        setTeamMessages(payload.messages ?? []);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to load chat";
-        setChatStatus(message);
-      } finally {
-        setChatLoading(false);
-      }
-    },
-    [],
-  );
+      setTeamMessages(payload.messages ?? []);
+    } finally {
+      setChatLoading(false);
+    }
+  }, []);
 
   useRequireUser((id) => {
     setUserId(id);
@@ -655,12 +642,17 @@ export default function DashboardPage() {
       const payload = await response.json();
 
       if (!response.ok) {
+        if (response.status === 403) {
+          setChatStatus("You must be a member of this team to chat");
+          return;
+        }
         throw new Error(payload.error || "Unable to send message");
       }
 
       setChatInput("");
       setTeamMessages((prev) => [payload.message, ...prev]);
       setChatStatus("Message sent");
+      loadTeamMessages(activeTeamId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to send message";
       setChatStatus(message);
@@ -681,14 +673,6 @@ export default function DashboardPage() {
       return allowedTeams.some((teamId) => userTeamIds.includes(teamId));
     });
   }, [activeTeamId, challenges, userTeamIds]);
-
-  const highlightedAnnouncement = useMemo(() => {
-    if (announcements.length === 0) return null;
-    if (highlightAnnouncementId) {
-      return announcements.find((announcement) => announcement.id === highlightAnnouncementId) ?? announcements[0];
-    }
-    return announcements[0];
-  }, [announcements, highlightAnnouncementId]);
 
   const { openChallenges, closedChallenges } = useMemo(() => {
     if (!currentTime) {
@@ -978,7 +962,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-semibold text-orange-600">Announcements</p>
                 <h2 className="text-2xl font-semibold text-slate-900">Headlines for everyone</h2>
-                <p className="text-sm text-slate-600">Admin and moderator posts appear here and in your popup inbox.</p>
+                <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
               </div>
               {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
             </div>
@@ -996,15 +980,6 @@ export default function DashboardPage() {
                         <p className="font-semibold text-orange-700">{announcement.author_name}</p>
                         <p>{new Date(announcement.created_at).toLocaleString()}</p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setHighlightAnnouncementId(announcement.id);
-                          setShowAnnouncementPopup(true);
-                        }}
-                        className="rounded-full border border-orange-200 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-100"
-                      >
-                        Pop open
-                      </button>
                     </div>
                     <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
                     <p className="text-sm text-slate-700">{announcement.body}</p>
@@ -1417,28 +1392,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {highlightedAnnouncement && showAnnouncementPopup && (
-        <div className="fixed bottom-4 right-4 z-20 w-80 max-w-[90vw] rounded-2xl border border-orange-200 bg-white shadow-2xl">
-          <div className="flex items-start justify-between gap-2 border-b border-orange-100 px-4 py-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Announcement</p>
-              <p className="text-sm font-semibold text-slate-900">{highlightedAnnouncement.title}</p>
-              <p className="text-xs text-slate-500">{highlightedAnnouncement.author_name}</p>
-            </div>
-            <button
-              aria-label="Dismiss announcement"
-              onClick={() => setShowAnnouncementPopup(false)}
-              className="text-sm text-slate-500 hover:text-slate-700"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="space-y-2 px-4 py-3 text-sm text-slate-700">
-            <p>{highlightedAnnouncement.body}</p>
-            <p className="text-xs text-slate-500">{new Date(highlightedAnnouncement.created_at).toLocaleString()}</p>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

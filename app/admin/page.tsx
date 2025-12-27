@@ -58,6 +58,7 @@ export default function AdminPage() {
   const [announcementForm, setAnnouncementForm] = useState({ title: "", body: "" });
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+  const [announcementLoadingIds, setAnnouncementLoadingIds] = useState<Set<string>>(new Set());
 
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
@@ -198,6 +199,32 @@ export default function AdminPage() {
       setAnnouncementStatus(message);
     } finally {
       setIsPostingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    setAnnouncementStatus(null);
+    setAnnouncementLoadingIds((prev) => new Set(prev).add(id));
+
+    try {
+      const response = await fetch(`/api/announcements?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to delete announcement");
+      }
+
+      setAnnouncements((prev) => prev.filter((announcement) => announcement.id !== id));
+      setAnnouncementStatus("Announcement deleted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete announcement";
+      setAnnouncementStatus(message);
+    } finally {
+      setAnnouncementLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -369,13 +396,22 @@ export default function AdminPage() {
               <p className="text-sm font-semibold text-slate-100">Recent posts</p>
               <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
                 {announcements.map((announcement) => (
-                  <div key={announcement.id} className="rounded-md border border-slate-800 bg-slate-900 p-3 text-sm">
+                  <div key={announcement.id} className="rounded-md border border-slate-800 bg-slate-900 p-3 text-sm space-y-2">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                       <span>{announcement.author_name}</span>
                       <span>{new Date(announcement.created_at).toLocaleString()}</span>
                     </div>
-                    <p className="mt-1 text-slate-100 font-semibold">{announcement.title}</p>
-                    <p className="text-slate-300">{announcement.body}</p>
+                    <div>
+                      <p className="text-slate-100 font-semibold">{announcement.title}</p>
+                      <p className="text-slate-300">{announcement.body}</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteAnnouncement(announcement.id)}
+                      disabled={announcementLoadingIds.has(announcement.id)}
+                      className="text-xs font-semibold text-rose-300 hover:text-rose-200 disabled:opacity-50"
+                    >
+                      {announcementLoadingIds.has(announcement.id) ? "Removing..." : "Delete"}
+                    </button>
                   </div>
                 ))}
                 {announcements.length === 0 && (
