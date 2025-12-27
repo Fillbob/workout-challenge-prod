@@ -36,10 +36,17 @@ export async function GET() {
   try {
     const teamsWithCounts = await Promise.all(
       (teams ?? []).map(async (team) => {
-        const members = team.team_members?.map((member) => ({
-          user_id: member.user_id,
-          display_name: member.profiles?.display_name ?? "Member",
-        })) ?? [];
+        const members =
+          team.team_members?.map((member) => {
+            const profile = Array.isArray(member.profiles)
+              ? member.profiles[0]
+              : member.profiles;
+
+            return {
+              user_id: member.user_id,
+              display_name: profile?.display_name ?? "Member",
+            };
+          }) ?? [];
 
         return {
           id: team.id,
