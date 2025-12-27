@@ -53,6 +53,53 @@ interface WeeklyPoints {
   points: number;
 }
 
+interface ChallengeClosingInfo {
+  isEditable: boolean;
+  closingLabel: string;
+  lockDateLabel: string | null;
+  daysUntilClose: number | null;
+}
+
+const MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
+const EDIT_GRACE_PERIOD_DAYS = 2;
+
+function parseDateSafe(value: string | null): Date | null {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function getChallengeClosingInfo(challenge: Challenge, now = new Date()): ChallengeClosingInfo {
+  const endDate = parseDateSafe(challenge.end_date);
+
+  if (!endDate) {
+    return {
+      isEditable: true,
+      closingLabel: "Closing date not set",
+      lockDateLabel: null,
+      daysUntilClose: null,
+    };
+  }
+
+  const lockDate = addDays(endDate, EDIT_GRACE_PERIOD_DAYS);
+  const timeRemaining = lockDate.getTime() - now.getTime();
+  const daysUntilClose = Math.max(0, Math.ceil(timeRemaining / MILLISECONDS_IN_DAY));
+
+  return {
+    isEditable: timeRemaining >= 0,
+    closingLabel: timeRemaining >= 0 ? `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}` : "Closed",
+    lockDateLabel: lockDate.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    daysUntilClose,
+  };
+}
+
 const LOCAL_TEAM_STORAGE_KEY = "localTeams";
 
 function readLocalTeams() {
@@ -496,7 +543,16 @@ export default function DashboardPage() {
       .sort((a, b) => a.week - b.week);
   }, [challenges, submissionState]);
 
-  const toggleChallenge = (id: string, checked: boolean) => {
+  const toggleChallenge = (challenge: Challenge, checked: boolean) => {
+    const closingInfo = getChallengeClosingInfo(challenge);
+
+    if (!closingInfo.isEditable) {
+      setSaveStatus({ message: "This challenge is locked and can no longer be edited.", tone: "error" });
+      return;
+    }
+
+    const id = challenge.id;
+
     setSubmissions((prev) => ({
       ...prev,
       [id]: {
@@ -515,12 +571,29 @@ export default function DashboardPage() {
     setSaveStatus(null);
     setIsSaving(true);
     console.log("Saving submissions via", process.env.NEXT_PUBLIC_SUPABASE_URL);
-    const payload = Array.from(changedIds).map((id) => ({
-      challenge_id: id,
-      user_id: userId,
-      completed: submissions[id]?.completed ?? false,
-      completed_at: submissions[id]?.completed ? submissions[id]?.completed_at : null,
-    }));
+    const now = new Date();
+    const editableChallengeIds = new Set(
+      challenges.filter((challenge) => getChallengeClosingInfo(challenge, now).isEditable).map((challenge) => challenge.id),
+    );
+    const skippedIds = Array.from(changedIds).filter((id) => !editableChallengeIds.has(id));
+
+    const payload = Array.from(changedIds)
+      .filter((id) => editableChallengeIds.has(id))
+      .map((id) => ({
+        challenge_id: id,
+        user_id: userId,
+        completed: submissions[id]?.completed ?? false,
+        completed_at: submissions[id]?.completed ? submissions[id]?.completed_at : null,
+      }));
+
+    if (payload.length === 0) {
+      setSaveStatus({
+        message: skippedIds.length > 0 ? "Edits are locked for these challenges." : "No changes to save.",
+        tone: "error",
+      });
+      setIsSaving(false);
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -530,7 +603,8 @@ export default function DashboardPage() {
       if (error) {
         setSaveStatus({ message: error.message, tone: "error" });
       } else {
-        setSaveStatus({ message: "Progress saved", tone: "success" });
+        const message = skippedIds.length > 0 ? "Progress saved. Locked challenges were not updated." : "Progress saved";
+        setSaveStatus({ message, tone: "success" });
         setChangedIds(new Set());
         loadSubmissions(userId);
       }
@@ -758,6 +832,8 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {challenges.map((challenge) => {
               const checked = submissionState[challenge.id] || false;
+              const closingInfo = getChallengeClosingInfo(challenge);
+              const toggleDisabled = !closingInfo.isEditable;
 
               return (
                 <div
@@ -769,15 +845,23 @@ export default function DashboardPage() {
                     role="switch"
                     aria-checked={checked}
                     aria-label={`Mark ${challenge.title} as completed`}
-                    onClick={() => toggleChallenge(challenge.id, !checked)}
+                    disabled={toggleDisabled}
+                    aria-disabled={toggleDisabled}
+                    onClick={() => {
+                      if (toggleDisabled) return;
+                      toggleChallenge(challenge, !checked);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === " " || event.key === "Enter") {
                         event.preventDefault();
-                        toggleChallenge(challenge.id, !checked);
+                        if (toggleDisabled) return;
+                        toggleChallenge(challenge, !checked);
                       }
                     }}
                     className={`mt-1 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
                       checked ? "bg-indigo-500" : "bg-slate-600"
+                    } ${
+                      toggleDisabled ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
                     <span
@@ -795,6 +879,24 @@ export default function DashboardPage() {
                       {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
                       {challenge.end_date && `Ends ${challenge.end_date}`} · {challenge.base_points} pts
                     </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      <span
+                        className={`px-2 py-1 rounded border ${
+                          closingInfo.isEditable
+                            ? "bg-amber-500/10 border-amber-400/30 text-amber-100"
+                            : "bg-slate-700/50 border-slate-600 text-slate-300"
+                        }`}
+                      >
+                        {closingInfo.closingLabel}
+                      </span>
+                      <span className="text-slate-500">
+                        {closingInfo.isEditable
+                          ? closingInfo.lockDateLabel
+                            ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
+                            : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
+                          : "Edits are locked for this challenge."}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
