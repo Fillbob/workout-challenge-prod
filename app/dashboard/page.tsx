@@ -262,11 +262,12 @@ export default function DashboardPage() {
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [recentOffset, setRecentOffset] = useState(0);
   const [showClosedChallenges, setShowClosedChallenges] = useState(false);
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
   const RECENT_PAGE_SIZE = 8;
 
   useEffect(() => {
-    setCurrentTimeState(new Date());
+    setCurrentTime(new Date());
   }, []);
 
   const handleActiveTeamChange = useCallback((teamId: string) => {
