@@ -202,8 +202,8 @@ function LineChart({ data }: { data: WeeklyPoints[] }) {
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Points earned by week">
       <defs>
         <linearGradient id="pointsGradient" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#818cf8" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#818cf8" stopOpacity="0.05" />
+          <stop offset="0%" stopColor="#fb923c" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#fdba74" stopOpacity="0.08" />
         </linearGradient>
       </defs>
       <rect x="0" y="0" width={width} height={height} fill="transparent" rx="8" />
@@ -211,19 +211,19 @@ function LineChart({ data }: { data: WeeklyPoints[] }) {
       <polyline
         points={polylinePoints}
         fill="none"
-        stroke="#818cf8"
+        stroke="#f97316"
         strokeWidth={2.5}
         strokeLinejoin="round"
         strokeLinecap="round"
       />
       {coordinates.map((point) => (
         <g key={point.week}>
-          <circle cx={point.x} cy={point.y} r={4} fill="#c7d2fe" stroke="#4f46e5" strokeWidth={1.5} />
+          <circle cx={point.x} cy={point.y} r={4} fill="#fff7ed" stroke="#ea580c" strokeWidth={1.5} />
           <text
             x={point.x}
             y={height - 2}
             textAnchor="middle"
-            className="fill-slate-400"
+            className="fill-slate-500"
             fontSize={10}
           >
             W{point.week}
@@ -687,132 +687,202 @@ export default function DashboardPage() {
     return new Date(value).toLocaleString();
   };
 
+  const nextClosing = useMemo(() => {
+    const candidates = visibleChallenges
+      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge) }))
+      .filter(({ info }) => info.daysUntilClose !== null);
+
+    if (candidates.length === 0) return null;
+
+    const nearest = candidates.reduce((closest, current) => {
+      const currentDays = current.info.daysUntilClose ?? Number.POSITIVE_INFINITY;
+      const closestDays = closest.info.daysUntilClose ?? Number.POSITIVE_INFINITY;
+      return currentDays < closestDays ? current : closest;
+    });
+
+    return {
+      title: nearest.challenge.title,
+      daysUntilClose: nearest.info.daysUntilClose,
+      lockDateLabel: nearest.info.lockDateLabel,
+      closingLabel: nearest.info.closingLabel,
+    };
+  }, [visibleChallenges]);
+
+  const cardClass =
+    "rounded-2xl border border-orange-100 bg-white/90 shadow-lg shadow-orange-100/60 backdrop-blur";
+
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-6xl mx-auto p-8 space-y-10">
-        <header className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-indigo-400">Dashboard</p>
+    <main className="min-h-screen text-slate-900">
+      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-orange-600">Dashboard</p>
             <h1 className="text-3xl font-semibold">
               Welcome back{profileName ? `, ${profileName}` : ""}
             </h1>
+            <p className="text-slate-600">
+              Track your teams, complete weekly challenges, and climb the leaderboard.
+            </p>
           </div>
-          <button
-            className="text-sm text-slate-300 underline"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              window.location.href = "/";
-            }}
-          >
-            Sign out
-          </button>
-        </header>
-
-        <section className="grid gap-6 md:grid-cols-2">
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <h2 className="text-xl font-semibold">Display name</h2>
-                <div className="flex gap-2 text-xs text-slate-300">
-                  {userIdentifier && <span className="px-2 py-1 rounded bg-slate-800">ID: {userIdentifier}</span>}
-                  {profileRole && <span className="px-2 py-1 rounded bg-slate-800">Access: {profileRole}</span>}
-                </div>
-              </div>
-              {profileStatus && <span className="text-sm text-indigo-400">{profileStatus}</span>}
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-slate-400">Display name</label>
-              <input
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+          <div className="flex items-center gap-3">
+            <a className="text-sm font-semibold text-orange-700 hover:text-orange-800" href="/leaderboard">
+              Leaderboard
+            </a>
             <button
-              onClick={handleProfileSave}
-              className="bg-indigo-500 hover:bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg"
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                window.location.href = "/";
+              }}
             >
-              Save name
+              Sign out
             </button>
           </div>
+        </header>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3">
-            <p className="text-sm text-indigo-400">Points</p>
-            <h2 className="text-3xl font-semibold">{totalPoints}</h2>
-            <p className="text-slate-300 text-sm">Points earned from completed challenges.</p>
-            <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Points by week</span>
-                {weeklyPoints.length > 0 && <span>Max: {Math.max(...weeklyPoints.map((entry) => entry.points))}</span>}
-              </div>
-              <div className="h-32 w-full rounded-lg bg-slate-800/70 border border-slate-700 p-3">
-                {weeklyPoints.length === 0 ? (
-                  <p className="text-slate-500 text-sm">Complete challenges to see your trend.</p>
-                ) : (
-                  <LineChart data={weeklyPoints} />
-                )}
-              </div>
-              {weeklyPoints.length > 0 && (
-                <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                  {weeklyPoints.map((entry) => (
-                    <span key={entry.week} className="px-2 py-1 rounded bg-slate-800 border border-slate-700">
-                      Week {entry.week}: {entry.points} pts
-                    </span>
-                  ))}
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-orange-600">Welcome</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Update your display name</h2>
+                <div className="flex flex-wrap gap-2 text-xs text-orange-700">
+                  {userIdentifier && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">ID: {userIdentifier}</span>}
+                  {profileRole && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">Access: {profileRole}</span>}
                 </div>
+              </div>
+              {profileStatus && <span className="text-sm font-medium text-orange-700">{profileStatus}</span>}
+            </div>
+            <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto]">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Display name</label>
+                <input
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                />
+              </div>
+              <button
+                onClick={handleProfileSave}
+                className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
+              >
+                Save name
+              </button>
+            </div>
+          </div>
+
+          <div className={`${cardClass} space-y-4 bg-gradient-to-br from-orange-100 via-white to-amber-100 p-6`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Points</p>
+                <h2 className="text-4xl font-semibold text-slate-900">{totalPoints}</h2>
+                <p className="text-slate-600 text-sm">Points earned from completed challenges.</p>
+              </div>
+              <span className="rounded-full border border-orange-200 bg-white/70 px-3 py-1 text-xs font-semibold text-orange-700">
+                {weeklyPoints.length} weeks tracked
+              </span>
+            </div>
+            <div className="rounded-xl border border-orange-100 bg-white/80 p-4">
+              {weeklyPoints.length === 0 ? (
+                <p className="text-sm text-slate-500">Complete challenges to see your trend.</p>
+              ) : (
+                <LineChart data={weeklyPoints} />
               )}
             </div>
+            {weeklyPoints.length > 0 && (
+              <div className="flex flex-wrap gap-2 text-xs text-orange-700">
+                {weeklyPoints.map((entry) => (
+                  <span key={entry.week} className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1">
+                    Week {entry.week}: {entry.points} pts
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
-        <section className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Teams</h2>
-            {teamStatus && <span className="text-sm text-rose-400">{teamStatus}</span>}
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} space-y-4 p-6`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-orange-600">Weekly challenges</p>
+                <h2 className="text-xl font-semibold text-slate-900">Stay on track</h2>
+                <p className="text-sm text-slate-600">
+                  {nextClosing
+                    ? `${nextClosing.closingLabel}${nextClosing.lockDateLabel ? ` · Locks ${nextClosing.lockDateLabel}` : ""}`
+                    : "No deadlines set yet."}
+                </p>
+              </div>
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border-8 border-orange-200 bg-orange-50 text-center shadow-inner">
+                <div>
+                  <p className="text-3xl font-bold text-orange-600">{nextClosing?.daysUntilClose ?? "--"}</p>
+                  <p className="text-xs text-slate-500">days left</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-2 text-sm text-slate-600">
+              <p>
+                <span className="font-semibold text-slate-900">{visibleChallenges.length}</span> challenges available
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">{Object.values(submissionState).filter(Boolean).length}</span> completed so far
+              </p>
+              <p>Active team: {activeTeamName ?? "None selected"}</p>
+            </div>
           </div>
-          <div className="space-y-3">
-            <div className="flex gap-2">
+
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Teams</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Join or switch teams</h2>
+              </div>
+              {teamStatus && <span className="text-sm font-medium text-orange-700">{teamStatus}</span>}
+            </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <input
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
-                placeholder="Join code"
-                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Enter join code"
+                className="flex-1 rounded-xl border border-orange-200 bg-white px-3 py-3 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
               />
               <button
                 onClick={handleJoinTeam}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg"
+                className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600"
               >
                 Join
               </button>
             </div>
             <div className="space-y-2">
-              <p className="text-sm text-slate-400">Your teams</p>
+              <p className="text-sm text-slate-600">Your teams</p>
               <div className="space-y-2">
-                {teams.length === 0 && <p className="text-slate-500">No teams yet</p>}
+                {teams.length === 0 && <p className="text-sm text-slate-500">No teams yet.</p>}
                 {teams.map((row) => {
                   if (!row.team) return null;
 
                   return (
                     <div
                       key={row.team.id}
-                      className={`flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg p-3 ${
-                        activeTeamId === row.team.id ? "ring-2 ring-indigo-500" : ""
+                      className={`flex items-center justify-between rounded-xl border p-3 ${
+                        activeTeamId === row.team.id
+                          ? "border-orange-300 bg-orange-50 shadow"
+                          : "border-orange-100 bg-white"
                       }`}
                     >
                       <div>
-                        <p className="font-medium">{row.team.name}</p>
-                        <p className="text-xs text-slate-400">Join code: {row.team.join_code}</p>
+                        <p className="font-semibold text-slate-900">{row.team.name}</p>
+                        <p className="text-xs text-slate-600">Join code: {row.team.join_code}</p>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 text-sm">
                         <button
                           onClick={() => handleActiveTeamChange(row.team!.id)}
-                          className="text-sm text-indigo-400"
+                          className="font-semibold text-orange-700 hover:text-orange-800"
                         >
                           {activeTeamId === row.team.id ? "Active" : "Set active"}
                         </button>
                         <button
                           onClick={() => handleLeaveTeam(row.team!.id)}
-                          className="text-sm text-rose-400"
+                          className="font-semibold text-rose-600 hover:text-rose-700"
                         >
                           Leave
                         </button>
@@ -825,176 +895,174 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-indigo-400">Challenges</p>
-              <h2 className="text-2xl font-semibold">Weekly goals</h2>
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Challenges</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Weekly goals</h2>
+              </div>
+              <button
+                onClick={handleSaveSubmissions}
+                disabled={saveDisabled}
+                title={!hasChanges ? "No changes to save." : undefined}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 focus:ring-offset-orange-50 ${
+                  saveDisabled
+                    ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                    : "bg-orange-500 hover:bg-orange-600"
+                }`}
+              >
+                {isSaving ? "Saving..." : "Save progress"}
+              </button>
             </div>
-            <button
-              onClick={handleSaveSubmissions}
-              disabled={saveDisabled}
-              title={!hasChanges ? "No changes to save." : undefined}
-              className={`px-4 py-2 rounded-lg text-white transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 ${
-                saveDisabled
-                  ? "bg-slate-700 text-slate-300 cursor-not-allowed opacity-80"
-                  : "bg-indigo-500 hover:bg-indigo-600"
-              }`}
-            >
-              {isSaving ? "Saving..." : "Save progress"}
-            </button>
-          </div>
-          {!hasChanges && <p className="text-xs text-slate-400">No changes to save.</p>}
-          {saveStatus && (
-            <div
-              className={`text-sm px-3 py-2 rounded-lg border w-fit ${
-                saveStatus.tone === "success"
-                  ? "bg-green-500/10 text-green-200 border-green-600/50"
-                  : "bg-rose-500/10 text-rose-200 border-rose-600/50"
-              }`}
-            >
-              {saveStatus.message}
-            </div>
-          )}
-          <div className="space-y-3">
-            {visibleChallenges.length === 0 && (
-              <p className="text-slate-500 text-sm">
-                No challenges available for your selected team yet.
-              </p>
+            {!hasChanges && <p className="text-xs text-slate-500">No changes to save.</p>}
+            {saveStatus && (
+              <div
+                className={`w-fit rounded-lg border px-3 py-2 text-sm ${
+                  saveStatus.tone === "success"
+                    ? "border-green-200 bg-green-50 text-green-800"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
+                }`}
+              >
+                {saveStatus.message}
+              </div>
             )}
-            {visibleChallenges.map((challenge) => {
-              const checked = submissionState[challenge.id] || false;
-              const closingInfo = getChallengeClosingInfo(challenge);
-              const toggleDisabled = !closingInfo.isEditable;
+            <div className="space-y-3">
+              {visibleChallenges.length === 0 && (
+                <p className="text-sm text-slate-500">No challenges available for your selected team yet.</p>
+              )}
+              {visibleChallenges.map((challenge) => {
+                const checked = submissionState[challenge.id] || false;
+                const closingInfo = getChallengeClosingInfo(challenge);
+                const toggleDisabled = !closingInfo.isEditable;
 
-              return (
-                <div
-                  key={challenge.id}
-                  className="flex items-start gap-3 bg-slate-800 border border-slate-700 rounded-lg p-4"
-                >
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={checked}
-                    aria-label={`Mark ${challenge.title} as completed`}
-                    disabled={toggleDisabled}
-                    aria-disabled={toggleDisabled}
-                    onClick={() => {
-                      if (toggleDisabled) return;
-                      toggleChallenge(challenge, !checked);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === " " || event.key === "Enter") {
-                        event.preventDefault();
+                return (
+                  <div
+                    key={challenge.id}
+                    className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 p-4"
+                  >
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={checked}
+                      aria-label={`Mark ${challenge.title} as completed`}
+                      disabled={toggleDisabled}
+                      aria-disabled={toggleDisabled}
+                      onClick={() => {
                         if (toggleDisabled) return;
                         toggleChallenge(challenge, !checked);
-                      }
-                    }}
-                    className={`mt-1 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                      checked ? "bg-indigo-500" : "bg-slate-600"
-                    } ${
-                      toggleDisabled ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                        checked ? "translate-x-5" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                  <div className="space-y-1">
-                    <p className="text-sm text-slate-400">
-                      Week {challenge.week_index} · Challenge {challenge.challenge_index}
-                    </p>
-                    <h3 className="text-lg font-semibold">{challenge.title}</h3>
-                    <p className="text-slate-300 text-sm">{challenge.description}</p>
-                    <p className="text-xs text-slate-500">
-                      {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
-                      {challenge.end_date && `Ends ${challenge.end_date}`} · {challenge.base_points} pts
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === " " || event.key === "Enter") {
+                          event.preventDefault();
+                          if (toggleDisabled) return;
+                          toggleChallenge(challenge, !checked);
+                        }
+                      }}
+                      className={`mt-1 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-orange-50 ${
+                        checked ? "bg-orange-500" : "bg-slate-200"
+                      } ${toggleDisabled ? "cursor-not-allowed opacity-60" : ""}`}
+                    >
                       <span
-                        className={`px-2 py-1 rounded border ${
-                          closingInfo.isEditable
-                            ? "bg-amber-500/10 border-amber-400/30 text-amber-100"
-                            : "bg-slate-700/50 border-slate-600 text-slate-300"
+                        aria-hidden="true"
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                          checked ? "translate-x-5" : "translate-x-1"
                         }`}
-                      >
-                        {closingInfo.closingLabel}
-                      </span>
-                      <span className="text-slate-500">
-                        {closingInfo.isEditable
-                          ? closingInfo.lockDateLabel
-                            ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
-                            : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
-                          : "Edits are locked for this challenge."}
-                      </span>
+                      />
+                    </button>
+                    <div className="space-y-1">
+                      <p className="text-sm text-slate-600">
+                        Week {challenge.week_index} · Challenge {challenge.challenge_index}
+                      </p>
+                      <h3 className="text-lg font-semibold text-slate-900">{challenge.title}</h3>
+                      <p className="text-sm text-slate-700">{challenge.description}</p>
+                      <p className="text-xs text-slate-500">
+                        {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
+                        {challenge.end_date && `Ends ${challenge.end_date}`} · {challenge.base_points} pts
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        <span
+                          className={`rounded-full border px-2 py-1 ${
+                            closingInfo.isEditable
+                              ? "border-orange-200 bg-orange-100 text-orange-700"
+                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {closingInfo.closingLabel}
+                        </span>
+                        <span className="text-slate-500">
+                          {closingInfo.isEditable
+                            ? closingInfo.lockDateLabel
+                              ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
+                              : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
+                            : "Edits are locked for this challenge."}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-indigo-400">Team activity</p>
-              <h2 className="text-2xl font-semibold">Recent submissions</h2>
-              <p className="text-slate-400 text-sm">Last 7 days</p>
+                );
+              })}
             </div>
-            {recentStatus && <span className="text-sm text-rose-400">{recentStatus}</span>}
           </div>
 
-          {!activeTeamId && <p className="text-slate-500 text-sm">Set an active team to see recent activity.</p>}
-
-          {activeTeamId && (
-            <div className="space-y-3">
-              {recentSubmissions.length === 0 && !recentLoading && (
-                <p className="text-slate-500 text-sm">No submissions yet.</p>
-              )}
-
-              <ul className="space-y-2">
-                {recentSubmissions.map((submission) => (
-                  <li
-                    key={submission.id}
-                    className="flex items-start justify-between rounded-lg border border-slate-800 bg-slate-800/70 p-3"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">{submission.name}</p>
-                      <p className="text-sm text-slate-300">Completed {submission.challenge_title}</p>
-                    </div>
-                    <p className="text-xs text-slate-500">{formatTimestamp(submission.completed_at)}</p>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="flex items-center gap-3">
-                <button
-                  disabled={!recentHasMore || recentLoading}
-                  onClick={() => activeTeamId && loadRecentActivity(activeTeamId)}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                    recentHasMore
-                      ? "bg-indigo-500 text-white hover:bg-indigo-600"
-                      : "cursor-not-allowed bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  {recentLoading ? "Loading..." : recentHasMore ? "Load more" : "No more results"}
-                </button>
-                <p className="text-xs text-slate-500">Showing {recentSubmissions.length} of {recentOffset} loaded</p>
+          <div className={`${cardClass} space-y-4 p-6`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Team activity</p>
+                <h2 className="text-xl font-semibold text-slate-900">Recent submissions</h2>
+                <p className="text-sm text-slate-600">Last 7 days</p>
               </div>
+              {recentStatus && <span className="text-sm font-medium text-rose-600">{recentStatus}</span>}
             </div>
-          )}
+
+            {!activeTeamId && <p className="text-sm text-slate-500">Set an active team to see recent activity.</p>}
+
+            {activeTeamId && (
+              <div className="space-y-3">
+                {recentSubmissions.length === 0 && !recentLoading && (
+                  <p className="text-sm text-slate-500">No submissions yet.</p>
+                )}
+
+                <ul className="space-y-2">
+                  {recentSubmissions.map((submission) => (
+                    <li
+                      key={submission.id}
+                      className="flex items-start justify-between rounded-xl border border-orange-100 bg-orange-50/70 p-3"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-semibold text-slate-900">{submission.name}</p>
+                        <p className="text-sm text-slate-700">Completed {submission.challenge_title}</p>
+                      </div>
+                      <p className="text-xs text-slate-500">{formatTimestamp(submission.completed_at)}</p>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    disabled={!recentHasMore || recentLoading}
+                    onClick={() => activeTeamId && loadRecentActivity(activeTeamId)}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                      recentHasMore
+                        ? "bg-orange-500 text-white hover:bg-orange-600"
+                        : "cursor-not-allowed bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {recentLoading ? "Loading..." : recentHasMore ? "Load more" : "No more results"}
+                  </button>
+                  <p className="text-xs text-slate-500">Showing {recentSubmissions.length} of {recentOffset} loaded</p>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         {activeTeamId && (
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-            <p className="text-sm text-slate-400">Active team</p>
-            <h3 className="text-xl font-semibold">{activeTeamName}</h3>
-            <p className="text-slate-400 text-sm">
-              View team stats in the <a className="text-indigo-400" href="/leaderboard">leaderboard</a>.
+          <div className={`${cardClass} p-5`}>
+            <p className="text-sm font-semibold text-orange-600">Active team</p>
+            <h3 className="text-xl font-semibold text-slate-900">{activeTeamName}</h3>
+            <p className="text-sm text-slate-600">
+              View team stats in the <a className="font-semibold text-orange-700" href="/leaderboard">leaderboard</a>.
             </p>
           </div>
         )}
