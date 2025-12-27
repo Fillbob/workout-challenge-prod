@@ -25,6 +25,20 @@ interface ContributionRow {
   points: number;
 }
 
+const tierStyles = [
+  "from-orange-500 via-amber-400 to-rose-400 text-white shadow-orange-200/60",
+  "from-amber-500 via-orange-400 to-amber-300 text-white shadow-amber-200/70",
+  "from-amber-200 via-orange-200 to-amber-100 text-amber-900 shadow-orange-100",
+];
+
+const getInitials = (name: string) =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase())
+    .slice(0, 2)
+    .join("") || "?";
+
 export default function LeaderboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
@@ -189,128 +203,183 @@ export default function LeaderboardPage() {
     return new Date(value).toLocaleString();
   };
 
+  const topPerformer = rows[0];
+
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-4xl mx-auto p-8 space-y-8">
-        <div className="flex items-center justify-between">
+    <main className="min-h-screen bg-gradient-to-b from-orange-100 via-amber-50 to-rose-50 text-slate-900">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
+        <div className="flex flex-col gap-4 rounded-3xl bg-white/70 p-6 shadow-xl shadow-orange-100/60 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm text-indigo-400">Leaderboard</p>
-            <h1 className="text-3xl font-semibold">Team rankings</h1>
+            <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Leaderboard</p>
+            <h1 className="text-3xl font-semibold text-slate-900">Team rankings</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Celebrate your squad and follow every contribution in a warm, card-first layout.
+            </p>
           </div>
-          <a className="text-sm text-indigo-400 underline" href="/dashboard">
+          <a
+            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:translate-y-[-1px]"
+            href="/dashboard"
+          >
             Back to dashboard
           </a>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <label className="text-sm text-slate-400">Choose a team</label>
-            <select
-              value={activeTeam ?? ""}
-              onChange={(e) => handleTeamChange(e.target.value)}
-              disabled={teams.length === 0}
-              className="bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="" disabled>
-                Select team
-              </option>
-              {teams.map((row) => (
-                <option key={row.team_id} value={row.teams[0]?.id ?? row.team_id}>
-                  {row.teams[0]?.name ?? "Unnamed team"}
-                </option>
-              ))}
-            </select>
+        <div className="mt-8 space-y-4">
+          <div className="rounded-3xl bg-white/80 p-4 shadow-lg shadow-orange-100/70 backdrop-blur">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-amber-700">Choose a team</p>
+                <p className="text-xs text-slate-500">Switch tabs to browse each leaderboard.</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {teams.map((row) => {
+                  const id = row.teams[0]?.id ?? row.team_id;
+                  const name = row.teams[0]?.name ?? "Unnamed team";
+                  const isActive = activeTeam === id;
+                  return (
+                    <button
+                      key={row.team_id}
+                      onClick={() => handleTeamChange(id)}
+                      className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
+                        isActive
+                          ? "border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-200"
+                          : "border-orange-100 bg-white/70 text-slate-700 hover:border-orange-200 hover:bg-white"
+                      }`}
+                      disabled={teams.length === 0}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+                {teams.length === 0 && <span className="text-sm text-slate-500">No teams yet</span>}
+              </div>
+            </div>
+            {status && <p className="mt-3 text-sm text-rose-500">{status}</p>}
           </div>
-          {status && <p className="text-sm text-rose-400">{status}</p>}
 
-          {activeTeam && (
-            <div className="space-y-4">
-              <div className="overflow-hidden rounded-lg border border-slate-800">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-800 text-slate-300">
-                    <tr>
-                      <th className="p-3">Rank</th>
-                      <th className="p-3">Name</th>
-                      <th className="p-3">Points</th>
-                      <th className="p-3">Completed</th>
-                      <th className="p-3">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, idx) => {
-                      const isExpanded = expandedUser === row.user_id;
-                      const memberContributions = contributions[row.user_id] ?? [];
+          {activeTeam ? (
+            <div className="grid gap-6 lg:grid-cols-5">
+              <div className="rounded-3xl bg-gradient-to-b from-orange-400 via-amber-300 to-rose-200 p-6 text-slate-900 shadow-xl shadow-orange-200/70 lg:col-span-2">
+                <div className="rounded-2xl bg-white/30 p-4 shadow-inner shadow-amber-200/40 backdrop-blur">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">Current leader</p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-800/70 text-lg font-bold text-amber-50">
+                      {topPerformer ? getInitials(topPerformer.name) : "--"}
+                    </div>
+                    <div>
+                      <p className="text-lg font-semibold">{topPerformer?.name ?? "No scores yet"}</p>
+                      <p className="text-sm text-amber-900/80">
+                        {topPerformer
+                          ? `${topPerformer.points} pts • ${topPerformer.completed_count} completed`
+                          : "Complete a challenge to appear here."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-2xl bg-white/40 p-4 backdrop-blur">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Participants</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{rows.length}</p>
+                    <p className="text-xs text-amber-900/80">Active teammates logged.</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/40 p-4 backdrop-blur">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Submissions</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-900">{activityOffset}</p>
+                    <p className="text-xs text-amber-900/80">Loaded contributions so far.</p>
+                  </div>
+                </div>
+              </div>
 
-                      return (
-                        <Fragment key={row.user_id}>
-                          <tr className={idx % 2 === 0 ? "bg-slate-900" : "bg-slate-800"}>
-                            <td className="p-3">#{idx + 1}</td>
-                            <td className="p-3 font-medium">{row.name}</td>
-                            <td className="p-3">{row.points}</td>
-                            <td className="p-3">{row.completed_count}</td>
-                            <td className="p-3">
-                              <button
-                                onClick={() => setExpandedUser(isExpanded ? null : row.user_id)}
-                                className="text-sm text-indigo-400 underline"
-                              >
-                                {isExpanded ? "Hide" : "View"} contributions
-                              </button>
-                            </td>
-                          </tr>
+              <div className="lg:col-span-3">
+                <div className="space-y-3">
+                  {rows.map((row, idx) => {
+                    const isExpanded = expandedUser === row.user_id;
+                    const memberContributions = contributions[row.user_id] ?? [];
+                    const rankStyle = tierStyles[idx] ?? "from-white via-amber-50 to-orange-50 text-slate-900";
 
-                          {isExpanded && (
-                            <tr className="bg-slate-900/60">
-                              <td colSpan={5} className="p-3">
-                                <div className="space-y-2">
-                                  <p className="text-sm text-slate-300">Recent contributions</p>
-                                  {memberContributions.length === 0 && (
-                                    <p className="text-xs text-slate-500">No submissions loaded yet.</p>
-                                  )}
-                                  <ul className="space-y-1">
-                                    {memberContributions.map((entry) => (
-                                      <li
-                                        key={`${row.user_id}-${entry.challenge_id}-${entry.completed_at}`}
-                                        className="flex justify-between rounded border border-slate-800 bg-slate-800/60 px-3 py-2 text-xs text-slate-200"
-                                      >
-                                        <span>
-                                          {entry.challenge_title} <span className="text-slate-400">· {entry.points} pts</span>
-                                        </span>
-                                        <span className="text-slate-500">{formatTimestamp(entry.completed_at)}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
+                    return (
+                      <Fragment key={row.user_id}>
+                        <div
+                          className={`relative overflow-hidden rounded-2xl border border-orange-100 bg-white/80 p-4 shadow-sm shadow-orange-100 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                            isExpanded ? "ring-2 ring-orange-200" : ""
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${rankStyle} text-base font-bold shadow`}
+                            >
+                              #{idx + 1}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-base font-semibold text-slate-900">{row.name}</p>
+                                  <p className="text-xs text-slate-500">{row.completed_count} completions</p>
                                 </div>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                    {rows.length === 0 && (
-                      <tr>
-                        <td className="p-3" colSpan={5}>
-                          <p className="text-slate-500">No data yet for this team.</p>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-bold text-amber-700">{row.points} pts</p>
+                                  <button
+                                    onClick={() => setExpandedUser(isExpanded ? null : row.user_id)}
+                                    className="text-xs font-semibold text-orange-600 underline underline-offset-4 transition hover:text-orange-700"
+                                  >
+                                    {isExpanded ? "Hide" : "View"} contributions
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-              <div className="flex items-center gap-3">
-                <button
-                  disabled={!activityHasMore || activityLoading}
-                  onClick={loadMoreActivity}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                    activityHasMore
-                      ? "bg-indigo-500 text-white hover:bg-indigo-600"
-                      : "cursor-not-allowed bg-slate-800 text-slate-400"
-                  }`}
-                >
-                  {activityLoading ? "Loading..." : activityHasMore ? "Load more activity" : "No more activity"}
-                </button>
-                <p className="text-xs text-slate-500">Loaded {activityOffset} submissions</p>
+                        {isExpanded && (
+                          <div className="-mt-2 mb-3 overflow-hidden rounded-2xl border border-orange-100 bg-white/70 px-4 py-3 text-sm shadow-inner shadow-orange-100">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Recent contributions</p>
+                            {memberContributions.length === 0 && (
+                              <p className="mt-2 text-xs text-slate-500">No submissions loaded yet.</p>
+                            )}
+                            <ul className="mt-2 space-y-2">
+                              {memberContributions.map((entry) => (
+                                <li
+                                  key={`${row.user_id}-${entry.challenge_id}-${entry.completed_at}`}
+                                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-100 bg-white/90 px-3 py-2 text-xs"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-slate-800">{entry.challenge_title}</span>
+                                    <span className="text-amber-700">{entry.points} pts</span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-500">{formatTimestamp(entry.completed_at)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                  {rows.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
+                      No data yet for this team.
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    disabled={!activityHasMore || activityLoading}
+                    onClick={loadMoreActivity}
+                    className={`inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
+                      activityHasMore
+                        ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-orange-200 hover:translate-y-[-1px]"
+                        : "cursor-not-allowed border border-orange-100 bg-white/70 text-slate-400"
+                    }`}
+                  >
+                    {activityLoading ? "Loading..." : activityHasMore ? "Load more activity" : "No more activity"}
+                  </button>
+                  <p className="text-xs text-slate-500">Loaded {activityOffset} submissions</p>
+                </div>
               </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-slate-600 shadow-inner shadow-orange-100">
+              Join or create a team to see the leaderboard.
             </div>
           )}
         </div>
