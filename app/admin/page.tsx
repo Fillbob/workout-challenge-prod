@@ -54,26 +54,22 @@ export default function AdminPage() {
   }, [supabase]);
 
   const loadTeams = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("teams")
-      .select("id, name, join_code, team_members(count)")
-      .order("name", { ascending: true });
-
-    if (error) {
-      setTeamStatus(error.message);
-      return;
-    }
-
-    const normalized: AdminTeam[] = (data ?? []).map((team) => ({
-      id: team.id,
-      name: team.name,
-      join_code: team.join_code,
-      member_count: Array.isArray(team.team_members) ? team.team_members[0]?.count ?? 0 : undefined,
-    }));
-
-    setTeams(normalized);
     setTeamStatus(null);
-  }, [supabase]);
+
+    try {
+      const response = await fetch("/api/admin/teams");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to load teams");
+      }
+
+      setTeams(result.teams ?? []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load teams";
+      setTeamStatus(message);
+    }
+  }, []);
 
   useRequireAdmin(() => setIsAuthed(true));
 
