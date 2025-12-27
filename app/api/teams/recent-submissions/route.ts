@@ -42,6 +42,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ submissions: [], hasMore: false, total: 0 });
   }
 
+  const { data: challengeRows, error: challengeError } = await admin
+    .from("challenges")
+    .select("id, team_ids");
+
+  if (challengeError) {
+    return NextResponse.json({ error: challengeError.message }, { status: 400 });
+  }
+
+  const allowedChallengeIds = (challengeRows ?? [])
+    .filter(
+      (challenge) =>
+        !challenge.team_ids ||
+        challenge.team_ids.length === 0 ||
+        (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId)),
+    )
+    .map((challenge) => challenge.id);
+
+  if (allowedChallengeIds.length === 0) {
+    return NextResponse.json({ submissions: [], hasMore: false, total: 0 });
+  }
+
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - (Number.isNaN(days) ? DEFAULT_DAYS : days));
 
@@ -52,6 +73,7 @@ export async function GET(request: Request) {
     })
     .in("user_id", memberIds)
     .eq("completed", true)
+    .in("challenge_id", allowedChallengeIds)
     .gte("completed_at", cutoffDate.toISOString())
     .order("completed_at", { ascending: false })
     .range(offset, offset + (Number.isNaN(limit) ? DEFAULT_LIMIT : limit) - 1);
