@@ -27,21 +27,6 @@ export async function GET(request: Request) {
 
   const admin = getServiceRoleClient();
 
-  const { data: membership, error: membershipError } = await admin
-    .from("team_members")
-    .select("team_id")
-    .eq("team_id", teamId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (membershipError) {
-    return NextResponse.json({ error: membershipError.message }, { status: 400 });
-  }
-
-  if (!membership) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { data: memberRows, error: membersError } = await admin
     .from("team_members")
     .select("user_id")
