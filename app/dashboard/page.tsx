@@ -64,6 +64,12 @@ interface ChallengeClosingInfo {
 
 const MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
 const EDIT_GRACE_PERIOD_DAYS = 2;
+const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
+  isEditable: true,
+  closingLabel: "Loading challenge timing...",
+  lockDateLabel: null,
+  daysUntilClose: null,
+};
 
 function parseDateSafe(value: string | null): Date | null {
   if (!value) return null;
@@ -78,7 +84,7 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-function getChallengeClosingInfo(challenge: Challenge, now = new Date()): ChallengeClosingInfo {
+function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClosingInfo {
   const endDate = parseDateSafe(challenge.end_date);
 
   if (!endDate) {
@@ -255,8 +261,14 @@ export default function DashboardPage() {
   const [recentLoading, setRecentLoading] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [recentOffset, setRecentOffset] = useState(0);
+  const [showClosedChallenges, setShowClosedChallenges] = useState(false);
+  const [currentTime, setCurrentTimeState] = useState<Date | null>(null);
 
   const RECENT_PAGE_SIZE = 8;
+
+  useEffect(() => {
+    setCurrentTimeState(new Date());
+  }, []);
 
   const handleActiveTeamChange = useCallback((teamId: string) => {
     setActiveTeamId(teamId);
@@ -543,6 +555,26 @@ export default function DashboardPage() {
     });
   }, [activeTeamId, challenges, userTeamIds]);
 
+  const { openChallenges, closedChallenges } = useMemo(() => {
+    if (!currentTime) {
+      return { openChallenges: visibleChallenges, closedChallenges: [] as Challenge[] };
+    }
+
+    const open: Challenge[] = [];
+    const closed: Challenge[] = [];
+
+    visibleChallenges.forEach((challenge) => {
+      const closingInfo = getChallengeClosingInfo(challenge, currentTime);
+      if (closingInfo.isEditable) {
+        open.push(challenge);
+      } else {
+        closed.push(challenge);
+      }
+    });
+
+    return { openChallenges: open, closedChallenges: closed };
+  }, [currentTime, visibleChallenges]);
+
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
     visibleChallenges.forEach((c) => {
@@ -571,7 +603,7 @@ export default function DashboardPage() {
   }, [submissionState, visibleChallenges]);
 
   const toggleChallenge = (challenge: Challenge, checked: boolean) => {
-    const closingInfo = getChallengeClosingInfo(challenge);
+    const closingInfo = getChallengeClosingInfo(challenge, new Date());
 
     if (!closingInfo.isEditable) {
       setSaveStatus({ message: "This challenge is locked and can no longer be edited.", tone: "error" });
@@ -688,8 +720,10 @@ export default function DashboardPage() {
   };
 
   const nextClosing = useMemo(() => {
-    const candidates = visibleChallenges
-      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge) }))
+    if (!currentTime) return null;
+
+    const candidates = openChallenges
+      .map((challenge) => ({ challenge, info: getChallengeClosingInfo(challenge, currentTime) }))
       .filter(({ info }) => info.daysUntilClose !== null);
 
     if (candidates.length === 0) return null;
@@ -706,7 +740,7 @@ export default function DashboardPage() {
       lockDateLabel: nearest.info.lockDateLabel,
       closingLabel: nearest.info.closingLabel,
     };
-  }, [visibleChallenges]);
+  }, [currentTime, openChallenges]);
 
   const cardClass =
     "rounded-2xl border border-orange-100 bg-white/90 shadow-lg shadow-orange-100/60 backdrop-blur";
@@ -741,36 +775,6 @@ export default function DashboardPage() {
         </header>
 
         <section className="grid gap-4 lg:grid-cols-3">
-          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-orange-600">Welcome</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Update your display name</h2>
-                <div className="flex flex-wrap gap-2 text-xs text-orange-700">
-                  {userIdentifier && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">ID: {userIdentifier}</span>}
-                  {profileRole && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">Access: {profileRole}</span>}
-                </div>
-              </div>
-              {profileStatus && <span className="text-sm font-medium text-orange-700">{profileStatus}</span>}
-            </div>
-            <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto]">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Display name</label>
-                <input
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-              <button
-                onClick={handleProfileSave}
-                className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
-              >
-                Save name
-              </button>
-            </div>
-          </div>
-
           <div className={`${cardClass} space-y-4 bg-gradient-to-br from-orange-100 via-white to-amber-100 p-6`}>
             <div className="flex items-start justify-between">
               <div>
@@ -799,10 +803,8 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <div className={`${cardClass} space-y-4 p-6`}>
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-orange-600">Weekly challenges</p>
@@ -822,75 +824,15 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-2 text-sm text-slate-600">
               <p>
-                <span className="font-semibold text-slate-900">{visibleChallenges.length}</span> challenges available
+                <span className="font-semibold text-slate-900">{openChallenges.length}</span> active challenges
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">{closedChallenges.length}</span> closed challenges
               </p>
               <p>
                 <span className="font-semibold text-slate-900">{Object.values(submissionState).filter(Boolean).length}</span> completed so far
               </p>
               <p>Active team: {activeTeamName ?? "None selected"}</p>
-            </div>
-          </div>
-
-          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-orange-600">Teams</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Join or switch teams</h2>
-              </div>
-              {teamStatus && <span className="text-sm font-medium text-orange-700">{teamStatus}</span>}
-            </div>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <input
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value)}
-                placeholder="Enter join code"
-                className="flex-1 rounded-xl border border-orange-200 bg-white px-3 py-3 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-              />
-              <button
-                onClick={handleJoinTeam}
-                className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600"
-              >
-                Join
-              </button>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm text-slate-600">Your teams</p>
-              <div className="space-y-2">
-                {teams.length === 0 && <p className="text-sm text-slate-500">No teams yet.</p>}
-                {teams.map((row) => {
-                  if (!row.team) return null;
-
-                  return (
-                    <div
-                      key={row.team.id}
-                      className={`flex items-center justify-between rounded-xl border p-3 ${
-                        activeTeamId === row.team.id
-                          ? "border-orange-300 bg-orange-50 shadow"
-                          : "border-orange-100 bg-white"
-                      }`}
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-900">{row.team.name}</p>
-                        <p className="text-xs text-slate-600">Join code: {row.team.join_code}</p>
-                      </div>
-                      <div className="flex gap-3 text-sm">
-                        <button
-                          onClick={() => handleActiveTeamChange(row.team!.id)}
-                          className="font-semibold text-orange-700 hover:text-orange-800"
-                        >
-                          {activeTeamId === row.team.id ? "Active" : "Set active"}
-                        </button>
-                        <button
-                          onClick={() => handleLeaveTeam(row.team!.id)}
-                          className="font-semibold text-rose-600 hover:text-rose-700"
-                        >
-                          Leave
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </section>
@@ -928,12 +870,14 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="space-y-3">
-              {visibleChallenges.length === 0 && (
-                <p className="text-sm text-slate-500">No challenges available for your selected team yet.</p>
+              {openChallenges.length === 0 && (
+                <p className="text-sm text-slate-500">No active challenges available for your selected team yet.</p>
               )}
-              {visibleChallenges.map((challenge) => {
+              {openChallenges.map((challenge) => {
                 const checked = submissionState[challenge.id] || false;
-                const closingInfo = getChallengeClosingInfo(challenge);
+                const closingInfo = currentTime
+                  ? getChallengeClosingInfo(challenge, currentTime)
+                  : FALLBACK_CLOSING_INFO;
                 const toggleDisabled = !closingInfo.isEditable;
 
                 return (
@@ -1003,6 +947,89 @@ export default function DashboardPage() {
                 );
               })}
             </div>
+
+            <div className="rounded-2xl border border-orange-100 bg-white/80">
+              <button
+                type="button"
+                onClick={() => setShowClosedChallenges((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-slate-900 hover:bg-orange-50"
+              >
+                <div className="space-y-1">
+                  <p>Closed challenges</p>
+                  <p className="text-xs font-normal text-slate-600">
+                    {closedChallenges.length === 0
+                      ? "No closed challenges yet."
+                      : "Completed or locked challenges are tucked away here."}
+                  </p>
+                </div>
+                <span
+                  aria-hidden
+                  className={`text-lg text-orange-600 transition-transform ${showClosedChallenges ? "rotate-180" : ""}`}
+                >
+                  ▼
+                </span>
+              </button>
+
+              {showClosedChallenges && (
+                <div className="divide-y divide-orange-100">
+                  {closedChallenges.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-slate-500">Nothing to review yet.</p>
+                  ) : (
+                    closedChallenges.map((challenge) => {
+                      const checked = submissionState[challenge.id] || false;
+                      const closingInfo = currentTime
+                        ? getChallengeClosingInfo(challenge, currentTime)
+                        : FALLBACK_CLOSING_INFO;
+
+                      return (
+                        <div
+                          key={challenge.id}
+                          className="flex items-start gap-3 px-4 py-3"
+                        >
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={checked}
+                            aria-label={`Mark ${challenge.title} as completed`}
+                            disabled
+                            aria-disabled
+                            className="mt-1 inline-flex h-6 w-11 items-center rounded-full bg-slate-200 opacity-60"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ${
+                                checked ? "translate-x-5" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
+                          <div className="space-y-1">
+                            <p className="text-sm text-slate-600">
+                              Week {challenge.week_index} · Challenge {challenge.challenge_index}
+                            </p>
+                            <h3 className="text-base font-semibold text-slate-900">{challenge.title}</h3>
+                            <p className="text-sm text-slate-700">{challenge.description}</p>
+                            <p className="text-xs text-slate-500">
+                              {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
+                              {challenge.end_date && `Ended ${challenge.end_date}`} · {challenge.base_points} pts
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                              <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-slate-600">
+                                {closingInfo.closingLabel}
+                              </span>
+                              <span className="text-slate-500">
+                                {closingInfo.lockDateLabel
+                                  ? `Edits locked ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
+                                  : "Edits are locked for this challenge."}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className={`${cardClass} space-y-4 p-6`}>
@@ -1054,6 +1081,101 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-orange-600">Welcome</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Update your display name</h2>
+                <div className="flex flex-wrap gap-2 text-xs text-orange-700">
+                  {userIdentifier && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">ID: {userIdentifier}</span>}
+                  {profileRole && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">Access: {profileRole}</span>}
+                </div>
+              </div>
+              {profileStatus && <span className="text-sm font-medium text-orange-700">{profileStatus}</span>}
+            </div>
+            <div className="grid items-end gap-3 sm:grid-cols-[1fr_auto]">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Display name</label>
+                <input
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                />
+              </div>
+              <button
+                onClick={handleProfileSave}
+                className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
+              >
+                Save name
+              </button>
+            </div>
+          </div>
+
+          <div className={`${cardClass} space-y-4 p-6`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Teams</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Join or switch teams</h2>
+              </div>
+              {teamStatus && <span className="text-sm font-medium text-orange-700">{teamStatus}</span>}
+            </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <input
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Enter join code"
+                className="flex-1 rounded-xl border border-orange-200 bg-white px-3 py-3 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+              />
+              <button
+                onClick={handleJoinTeam}
+                className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600"
+              >
+                Join
+              </button>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-slate-600">Your teams</p>
+              <div className="space-y-2">
+                {teams.length === 0 && <p className="text-sm text-slate-500">No teams yet.</p>}
+                {teams.map((row) => {
+                  if (!row.team) return null;
+
+                  return (
+                    <div
+                      key={row.team.id}
+                      className={`flex items-center justify-between rounded-xl border p-3 ${
+                        activeTeamId === row.team.id
+                          ? "border-orange-300 bg-orange-50 shadow"
+                          : "border-orange-100 bg-white"
+                      }`}
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">{row.team.name}</p>
+                        <p className="text-xs text-slate-600">Join code: {row.team.join_code}</p>
+                      </div>
+                      <div className="flex gap-3 text-sm">
+                        <button
+                          onClick={() => handleActiveTeamChange(row.team!.id)}
+                          className="font-semibold text-orange-700 hover:text-orange-800"
+                        >
+                          {activeTeamId === row.team.id ? "Active" : "Set active"}
+                        </button>
+                        <button
+                          onClick={() => handleLeaveTeam(row.team!.id)}
+                          className="font-semibold text-rose-600 hover:text-rose-700"
+                        >
+                          Leave
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
