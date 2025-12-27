@@ -92,3 +92,40 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ announcement: { ...data, author_name: "You" } });
 }
+
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const announcementId = url.searchParams.get("id");
+
+  if (!announcementId) {
+    return NextResponse.json({ error: "Announcement id is required" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !isElevatedRole(profile?.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const admin = getServiceRoleClient();
+  const { error } = await admin.from("announcements").delete().eq("id", announcementId);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}
