@@ -55,6 +55,23 @@ interface WeeklyPoints {
   points: number;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  author_name: string;
+}
+
+interface TeamMessage {
+  id: string;
+  message: string;
+  team_id: string;
+  user_id: string;
+  created_at: string;
+  author_name: string;
+}
+
 interface ChallengeClosingInfo {
   isEditable: boolean;
   closingLabel: string;
@@ -263,6 +280,14 @@ export default function DashboardPage() {
   const [recentOffset, setRecentOffset] = useState(0);
   const [showClosedChallenges, setShowClosedChallenges] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
+  const [highlightAnnouncementId, setHighlightAnnouncementId] = useState<string | null>(null);
+  const [showAnnouncementPopup, setShowAnnouncementPopup] = useState(true);
+  const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatStatus, setChatStatus] = useState<string | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -386,6 +411,57 @@ export default function DashboardPage() {
     [supabase],
   );
 
+  const loadAnnouncements = useCallback(async () => {
+    try {
+      const response = await fetch("/api/announcements");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load announcements");
+      }
+
+      setAnnouncements(payload.announcements ?? []);
+      setAnnouncementStatus(null);
+      if (payload.announcements?.[0]?.id) {
+        setHighlightAnnouncementId(payload.announcements[0].id);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load announcements";
+      setAnnouncementStatus(message);
+    }
+  }, []);
+
+  const loadTeamMessages = useCallback(
+    async (teamId: string | null) => {
+      if (!teamId) {
+        setTeamMessages([]);
+        setChatLoading(false);
+        setChatStatus(null);
+        return;
+      }
+
+      setChatLoading(true);
+      setChatStatus(null);
+
+      try {
+        const response = await fetch(`/api/teams/chat?teamId=${encodeURIComponent(teamId)}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to load chat");
+        }
+
+        setTeamMessages(payload.messages ?? []);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to load chat";
+        setChatStatus(message);
+      } finally {
+        setChatLoading(false);
+      }
+    },
+    [],
+  );
+
   useRequireUser((id) => {
     setUserId(id);
   });
@@ -396,9 +472,10 @@ export default function DashboardPage() {
     loadTeams();
     loadChallenges();
     loadSubmissions(userId);
+    loadAnnouncements();
     const stored = window.localStorage.getItem("activeTeamId");
     if (stored) setActiveTeamId(stored);
-  }, [userId, initializeProfile, loadTeams, loadChallenges, loadSubmissions]);
+  }, [userId, initializeProfile, loadTeams, loadChallenges, loadSubmissions, loadAnnouncements]);
 
   useEffect(() => {
     if (teams.length === 0) {
@@ -417,6 +494,20 @@ export default function DashboardPage() {
     const timer = window.setTimeout(() => setSaveStatus(null), 4000);
     return () => window.clearTimeout(timer);
   }, [saveStatus]);
+
+  useEffect(() => {
+    if (!chatStatus) return;
+    const timer = window.setTimeout(() => setChatStatus(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [chatStatus]);
+
+  useEffect(() => {
+    loadTeamMessages(activeTeamId);
+    if (!activeTeamId) return;
+
+    const interval = window.setInterval(() => loadTeamMessages(activeTeamId), 15000);
+    return () => window.clearInterval(interval);
+  }, [activeTeamId, loadTeamMessages]);
 
   const handleProfileSave = async () => {
     if (!userId) return;
@@ -540,6 +631,42 @@ export default function DashboardPage() {
     setTeamStatus(leftServer ? "Left team" : "Left team locally");
   };
 
+  const handleSendMessage = async () => {
+    if (!activeTeamId) {
+      setChatStatus("Set an active team to chat");
+      return;
+    }
+
+    const trimmed = chatInput.trim();
+    if (!trimmed) {
+      setChatStatus("Message cannot be empty");
+      return;
+    }
+
+    setChatStatus(null);
+
+    try {
+      const response = await fetch("/api/teams/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamId: activeTeamId, message: trimmed }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to send message");
+      }
+
+      setChatInput("");
+      setTeamMessages((prev) => [payload.message, ...prev]);
+      setChatStatus("Message sent");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send message";
+      setChatStatus(message);
+    }
+  };
+
   const userTeamIds = useMemo(() => {
     return teams
       .map((team) => team.team?.id ?? team.team_id)
@@ -554,6 +681,14 @@ export default function DashboardPage() {
       return allowedTeams.some((teamId) => userTeamIds.includes(teamId));
     });
   }, [activeTeamId, challenges, userTeamIds]);
+
+  const highlightedAnnouncement = useMemo(() => {
+    if (announcements.length === 0) return null;
+    if (highlightAnnouncementId) {
+      return announcements.find((announcement) => announcement.id === highlightAnnouncementId) ?? announcements[0];
+    }
+    return announcements[0];
+  }, [announcements, highlightAnnouncementId]);
 
   const { openChallenges, closedChallenges } = useMemo(() => {
     if (!currentTime) {
@@ -834,6 +969,98 @@ export default function DashboardPage() {
               </p>
               <p>Active team: {activeTeamName ?? "None selected"}</p>
             </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Announcements</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Headlines for everyone</h2>
+                <p className="text-sm text-slate-600">Admin and moderator posts appear here and in your popup inbox.</p>
+              </div>
+              {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
+            </div>
+            {announcements.length === 0 ? (
+              <p className="text-sm text-slate-500">No announcements yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {announcements.map((announcement) => (
+                  <li
+                    key={announcement.id}
+                    className="rounded-xl border border-orange-100 bg-orange-50/60 p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-orange-700">{announcement.author_name}</p>
+                        <p>{new Date(announcement.created_at).toLocaleString()}</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setHighlightAnnouncementId(announcement.id);
+                          setShowAnnouncementPopup(true);
+                        }}
+                        className="rounded-full border border-orange-200 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+                      >
+                        Pop open
+                      </button>
+                    </div>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
+                    <p className="text-sm text-slate-700">{announcement.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className={`${cardClass} space-y-4 p-6`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Team chat</p>
+                <h2 className="text-xl font-semibold text-slate-900">Say hello to your team</h2>
+                <p className="text-sm text-slate-600">Messages are visible to everyone on your active team.</p>
+              </div>
+              {chatStatus && <span className="text-sm font-medium text-orange-700">{chatStatus}</span>}
+            </div>
+
+            {!activeTeamId && <p className="text-sm text-slate-500">Set an active team to start chatting.</p>}
+
+            {activeTeamId && (
+              <div className="space-y-3">
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                  {chatLoading && <p className="text-sm text-slate-500">Loading chat...</p>}
+                  {teamMessages.length === 0 && !chatLoading && (
+                    <p className="text-sm text-slate-500">No messages yet. Start the conversation!</p>
+                  )}
+                  {teamMessages.map((message) => (
+                    <div key={message.id} className="rounded-lg border border-orange-100 bg-orange-50/60 p-3">
+                      <div className="flex items-center justify-between text-xs text-slate-600">
+                        <p className="font-semibold text-orange-700">{message.author_name}</p>
+                        <span>{new Date(message.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-800">{message.message}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-800">Send a message</label>
+                  <textarea
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
+                  >
+                    Send to {activeTeamName ?? "team"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -1189,6 +1416,29 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {highlightedAnnouncement && showAnnouncementPopup && (
+        <div className="fixed bottom-4 right-4 z-20 w-80 max-w-[90vw] rounded-2xl border border-orange-200 bg-white shadow-2xl">
+          <div className="flex items-start justify-between gap-2 border-b border-orange-100 px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Announcement</p>
+              <p className="text-sm font-semibold text-slate-900">{highlightedAnnouncement.title}</p>
+              <p className="text-xs text-slate-500">{highlightedAnnouncement.author_name}</p>
+            </div>
+            <button
+              aria-label="Dismiss announcement"
+              onClick={() => setShowAnnouncementPopup(false)}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="space-y-2 px-4 py-3 text-sm text-slate-700">
+            <p>{highlightedAnnouncement.body}</p>
+            <p className="text-xs text-slate-500">{new Date(highlightedAnnouncement.created_at).toLocaleString()}</p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
