@@ -64,6 +64,12 @@ interface ChallengeClosingInfo {
 
 const MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
 const EDIT_GRACE_PERIOD_DAYS = 2;
+const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
+  isEditable: true,
+  closingLabel: "Loading challenge timing...",
+  lockDateLabel: null,
+  daysUntilClose: null,
+};
 
 function parseDateSafe(value: string | null): Date | null {
   if (!value) return null;
@@ -78,7 +84,7 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-function getChallengeClosingInfo(challenge: Challenge, now = new Date()): ChallengeClosingInfo {
+function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClosingInfo {
   const endDate = parseDateSafe(challenge.end_date);
 
   if (!endDate) {
@@ -258,6 +264,10 @@ export default function DashboardPage() {
   const [showClosedChallenges, setShowClosedChallenges] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
+
+  useEffect(() => {
+    setCurrentTimeState(new Date());
+  }, []);
 
   const handleActiveTeamChange = useCallback((teamId: string) => {
     setActiveTeamId(teamId);
@@ -589,7 +599,7 @@ export default function DashboardPage() {
   }, [submissionState, visibleChallenges]);
 
   const toggleChallenge = (challenge: Challenge, checked: boolean) => {
-    const closingInfo = getChallengeClosingInfo(challenge);
+    const closingInfo = getChallengeClosingInfo(challenge, new Date());
 
     if (!closingInfo.isEditable) {
       setSaveStatus({ message: "This challenge is locked and can no longer be edited.", tone: "error" });
@@ -860,7 +870,9 @@ export default function DashboardPage() {
               )}
               {openChallenges.map((challenge) => {
                 const checked = submissionState[challenge.id] || false;
-                const closingInfo = getChallengeClosingInfo(challenge);
+                const closingInfo = currentTime
+                  ? getChallengeClosingInfo(challenge, currentTime)
+                  : FALLBACK_CLOSING_INFO;
                 const toggleDisabled = !closingInfo.isEditable;
 
                 return (
