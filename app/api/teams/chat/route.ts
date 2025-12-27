@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
   const { data: membership } = await admin
     .from("team_members")
-    .select("id")
+    .select("team_id")
     .eq("team_id", teamId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
 
   const { data: membership } = await admin
     .from("team_members")
-    .select("id")
+    .select("team_id")
     .eq("team_id", teamId)
     .eq("user_id", user.id)
     .maybeSingle();
