@@ -226,7 +226,8 @@ function LineChart({ data }: { data: WeeklyPoints[] }) {
       <defs>
         <linearGradient id="pointsGradient" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor="#fb923c" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#fdba74" stopOpacity="0.08" />
+          <stop offset="55%" stopColor="#34d399" stopOpacity="0.2" />
+          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.12" />
         </linearGradient>
       </defs>
       <rect x="0" y="0" width={width} height={height} fill="transparent" rx="8" />
@@ -872,14 +873,17 @@ export default function DashboardPage() {
   }, [currentTime, openChallenges]);
 
   const cardClass =
-    "rounded-2xl border border-orange-100 bg-white/90 shadow-lg shadow-orange-100/60 backdrop-blur";
+    "rounded-2xl border border-orange-100/80 bg-gradient-to-br from-white via-orange-50/40 to-sky-50/60 shadow-lg shadow-orange-100/60 backdrop-blur";
 
   return (
-    <main className="min-h-screen text-slate-900">
+    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-sky-50 text-slate-900">
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-orange-600">Dashboard</p>
+            <p className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-orange-600 shadow-sm shadow-orange-100">
+              <span className="h-2 w-2 rounded-full bg-gradient-to-r from-orange-500 via-rose-500 to-amber-400" />
+              Dashboard
+            </p>
             <h1 className="text-3xl font-semibold">
               Welcome back{profileName ? `, ${profileName}` : ""}
             </h1>
@@ -889,7 +893,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <a
-              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:translate-y-[-1px]"
+              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-orange-500 via-pink-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-pink-100 transition hover:translate-y-[-1px]"
               href="/leaderboard"
             >
               Leaderboard
@@ -918,7 +922,7 @@ export default function DashboardPage() {
                     : "No deadlines set yet."}
                 </p>
               </div>
-              <div className="flex h-24 w-24 items-center justify-center rounded-full border-8 border-orange-200 bg-orange-50 text-center shadow-inner">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 via-amber-50 to-emerald-100 text-center shadow-inner shadow-orange-100">
                 <div>
                   <p className="text-3xl font-bold text-orange-600">{nextClosing?.daysUntilClose ?? "--"}</p>
                   <p className="text-xs text-slate-500">days left</p>
@@ -926,27 +930,45 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="grid gap-2 text-sm text-slate-600">
-              <p>
+              <p className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Active
+                </span>
                 <span className="font-semibold text-slate-900">{openChallenges.length}</span> active challenges
               </p>
-              <p>
+              <p className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                  Closed
+                </span>
                 <span className="font-semibold text-slate-900">{closedChallenges.length}</span> closed challenges
               </p>
-              <p>
+              <p className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                  Completed
+                </span>
                 <span className="font-semibold text-slate-900">{Object.values(submissionState).filter(Boolean).length}</span> completed so far
               </p>
-              <p>Active team: {activeTeamName ?? "None selected"}</p>
+              <p className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                  Team
+                </span>
+                {activeTeamName ?? "None selected"}
+              </p>
             </div>
           </div>
 
-          <div className={`${cardClass} lg:col-span-2 space-y-4 bg-gradient-to-br from-orange-100 via-white to-amber-100 p-6`}>
+          <div className={`${cardClass} lg:col-span-2 space-y-4 bg-gradient-to-br from-orange-100 via-white to-sky-100 p-6`}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-orange-600">Points</p>
                 <h2 className="text-4xl font-semibold text-slate-900">{totalPoints}</h2>
                 <p className="text-slate-600 text-sm">Points earned from completed challenges.</p>
               </div>
-              <span className="rounded-full border border-orange-200 bg-white/70 px-3 py-1 text-xs font-semibold text-orange-700">
+              <span className="rounded-full border border-orange-200 bg-gradient-to-r from-sky-50 via-emerald-50 to-orange-50 px-3 py-1 text-xs font-semibold text-sky-800">
                 {weeklyPoints.length} weeks tracked
               </span>
             </div>
@@ -1180,7 +1202,7 @@ export default function DashboardPage() {
                 {announcements.map((announcement) => (
                   <li
                     key={announcement.id}
-                    className="rounded-xl border border-orange-100 bg-orange-50/60 p-4 shadow-sm"
+                    className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
                   >
                     <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
                       <div className="space-y-1">
@@ -1218,15 +1240,15 @@ export default function DashboardPage() {
                 )}
 
                 <ul className="space-y-2">
-                  {recentSubmissions.map((submission) => (
-                    <li
-                      key={submission.id}
-                      className="flex items-start justify-between rounded-xl border border-orange-100 bg-orange-50/70 p-3"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-semibold text-slate-900">{submission.name}</p>
-                        <p className="text-sm text-slate-700">Completed {submission.challenge_title}</p>
-                      </div>
+                {recentSubmissions.map((submission) => (
+                  <li
+                    key={submission.id}
+                    className="flex items-start justify-between rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-amber-50 to-sky-50 p-3"
+                  >
+                    <div className="space-y-1">
+                      <p className="font-semibold text-slate-900">{submission.name}</p>
+                      <p className="text-sm text-slate-700">Completed {submission.challenge_title}</p>
+                    </div>
                       <p className="text-xs text-slate-500">{formatTimestamp(submission.completed_at)}</p>
                     </li>
                   ))}
@@ -1277,8 +1299,8 @@ export default function DashboardPage() {
                         key={message.id}
                         className={`rounded-lg border p-3 ${
                           isOwnMessage
-                            ? "border-orange-200 bg-orange-100/80 shadow-inner"
-                            : "border-orange-100 bg-orange-50/60"
+                            ? "border-orange-200 bg-gradient-to-r from-orange-100 via-amber-50 to-emerald-50 shadow-inner"
+                            : "border-orange-100 bg-gradient-to-r from-orange-50 via-rose-50 to-sky-50"
                         }`}
                       >
                         <div className="flex items-center justify-between text-xs text-slate-600">
