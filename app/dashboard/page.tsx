@@ -287,6 +287,9 @@ export default function DashboardPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [lastSeenMessageIds, setLastSeenMessageIds] = useState<Record<string, string | null>>({});
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -489,6 +492,23 @@ export default function DashboardPage() {
     return () => window.clearTimeout(timer);
   }, [chatStatus]);
 
+  const markChatRead = useCallback(
+    (teamId: string) => {
+      const lastMessage = teamMessages[teamMessages.length - 1];
+
+      setLastSeenMessageIds((previous) => ({
+        ...previous,
+        [teamId]: lastMessage?.id ?? null,
+      }));
+
+      setUnreadCounts((previous) => ({
+        ...previous,
+        [teamId]: 0,
+      }));
+    },
+    [teamMessages],
+  );
+
   useEffect(() => {
     loadTeamMessages(activeTeamId);
     if (!activeTeamId) return;
@@ -506,6 +526,53 @@ export default function DashboardPage() {
       supabase.removeChannel(channel);
     };
   }, [activeTeamId, loadTeamMessages, supabase]);
+
+  useEffect(() => {
+    if (!activeTeamId) return;
+
+    const lastMessage = teamMessages[teamMessages.length - 1] ?? null;
+
+    if (chatOpen) {
+      markChatRead(activeTeamId);
+      return;
+    }
+
+    if (!lastMessage) {
+      setUnreadCounts((previous) => ({
+        ...previous,
+        [activeTeamId]: 0,
+      }));
+      return;
+    }
+
+    const lastSeenId = lastSeenMessageIds[activeTeamId];
+
+    if (!lastSeenId) {
+      setUnreadCounts((previous) => ({
+        ...previous,
+        [activeTeamId]: teamMessages.length,
+      }));
+      return;
+    }
+
+    if (lastSeenId === lastMessage.id) {
+      return;
+    }
+
+    const lastSeenIndex = teamMessages.findIndex((message) => message.id === lastSeenId);
+    const unread = lastSeenIndex === -1 ? teamMessages.length : teamMessages.length - lastSeenIndex - 1;
+
+    setUnreadCounts((previous) => ({
+      ...previous,
+      [activeTeamId]: unread,
+    }));
+  }, [activeTeamId, chatOpen, lastSeenMessageIds, markChatRead, teamMessages]);
+
+  useEffect(() => {
+    if (!activeTeamId) {
+      setChatOpen(false);
+    }
+  }, [activeTeamId]);
 
   const handleProfileSave = async () => {
     if (!userId) return;
@@ -874,6 +941,8 @@ export default function DashboardPage() {
 
   const cardClass =
     "rounded-2xl border border-orange-100/80 bg-gradient-to-br from-white via-orange-50/40 to-sky-50/60 shadow-lg shadow-orange-100/60 backdrop-blur";
+
+  const unreadCount = activeTeamId ? unreadCounts[activeTeamId] ?? 0 : 0;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-sky-50 text-slate-900">
@@ -1271,74 +1340,6 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-
-          <div className={`${cardClass} space-y-4 p-6`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-orange-600">Team chat</p>
-                <h2 className="text-xl font-semibold text-slate-900">Say hello to your team</h2>
-                <p className="text-sm text-slate-600">Messages are visible to everyone on your active team.</p>
-              </div>
-              {chatStatus && <span className="text-sm font-medium text-orange-700">{chatStatus}</span>}
-            </div>
-
-            {!activeTeamId && <p className="text-sm text-slate-500">Set an active team to start chatting.</p>}
-
-            {activeTeamId && (
-              <div className="space-y-3">
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {chatLoading && <p className="text-sm text-slate-500">Loading chat...</p>}
-                  {teamMessages.length === 0 && !chatLoading && (
-                    <p className="text-sm text-slate-500">No messages yet. Start the conversation!</p>
-                  )}
-                  {teamMessages.map((message) => {
-                    const isOwnMessage = message.user_id === userId;
-
-                    return (
-                      <div
-                        key={message.id}
-                        className={`rounded-lg border p-3 ${
-                          isOwnMessage
-                            ? "border-orange-200 bg-gradient-to-r from-orange-100 via-amber-50 to-emerald-50 shadow-inner"
-                            : "border-orange-100 bg-gradient-to-r from-orange-50 via-rose-50 to-sky-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-xs text-slate-600">
-                          <p
-                            className={`font-semibold ${
-                              isOwnMessage ? "text-orange-800" : "text-orange-700"
-                            }`}
-                          >
-                            {message.author_name}
-                          </p>
-                          <span>{new Date(message.created_at).toLocaleString()}</span>
-                        </div>
-                        <p className={`mt-1 text-sm ${isOwnMessage ? "text-slate-900" : "text-slate-800"}`}>
-                          {message.message}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-800">Send a message</label>
-                  <textarea
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
-                  >
-                    Send to {activeTeamName ?? "team"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </section>
         <section className="grid gap-4 lg:grid-cols-3">
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
@@ -1442,6 +1443,104 @@ export default function DashboardPage() {
             <p className="text-sm text-slate-600">
               View team stats in the <a className="font-semibold text-orange-700" href="/leaderboard">leaderboard</a>.
             </p>
+          </div>
+        )}
+
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+          {chatStatus && (
+            <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-orange-700 shadow-lg shadow-orange-100">
+              {chatStatus}
+            </span>
+          )}
+
+          <button
+            type="button"
+            disabled={!activeTeamId}
+            onClick={() => activeTeamId && setChatOpen((open) => !open)}
+            className={`group relative inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-lg shadow-orange-200 transition ${
+              activeTeamId ? "bg-orange-500 text-white hover:bg-orange-600" : "cursor-not-allowed bg-slate-300 text-slate-600"
+            }`}
+          >
+            <span className="absolute -right-1 -top-1 inline-flex h-3 w-3 animate-pulse rounded-full bg-white/90" />
+            <span className="flex items-center gap-2">
+              <span className="text-lg">💬</span>
+              Team chat
+            </span>
+            {unreadCount > 0 && (
+              <span className="flex min-w-[1.5rem] items-center justify-center rounded-full bg-white px-2 py-0.5 text-xs font-bold text-orange-600 shadow-inner">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {chatOpen && activeTeamId && (
+          <div className="fixed bottom-24 right-6 z-50 w-[min(420px,calc(100%-2rem))] space-y-3 rounded-2xl border border-orange-100 bg-white/95 shadow-2xl shadow-orange-200 backdrop-blur">
+            <div className="flex items-start justify-between gap-3 border-b border-orange-50 px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold text-orange-600">Team chat</p>
+                <p className="text-lg font-semibold text-slate-900">{activeTeamName ?? "Active team"}</p>
+                <p className="text-xs text-slate-600">Messages are visible to everyone on your active team.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChatOpen(false)}
+                className="rounded-full p-2 text-sm font-semibold text-slate-500 transition hover:bg-orange-50 hover:text-orange-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="max-h-80 space-y-2 overflow-y-auto px-4">
+              {chatLoading && <p className="text-sm text-slate-500">Loading chat...</p>}
+              {teamMessages.length === 0 && !chatLoading && (
+                <p className="text-sm text-slate-500">No messages yet. Start the conversation!</p>
+              )}
+              {teamMessages.map((message) => {
+                const isOwnMessage = message.user_id === userId;
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`rounded-lg border p-3 ${
+                      isOwnMessage
+                        ? "border-orange-200 bg-gradient-to-r from-orange-100 via-amber-50 to-emerald-50 shadow-inner"
+                        : "border-orange-100 bg-gradient-to-r from-orange-50 via-rose-50 to-sky-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <p
+                        className={`font-semibold ${
+                          isOwnMessage ? "text-orange-800" : "text-orange-700"
+                        }`}
+                      >
+                        {message.author_name}
+                      </p>
+                      <span>{new Date(message.created_at).toLocaleString()}</span>
+                    </div>
+                    <p className={`mt-1 text-sm ${isOwnMessage ? "text-slate-900" : "text-slate-800"}`}>
+                      {message.message}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2 border-t border-orange-50 bg-orange-50/40 px-4 py-3">
+              <label className="text-sm font-semibold text-slate-800">Send a message</label>
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                rows={2}
+                className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+              />
+              <button
+                onClick={handleSendMessage}
+                className="inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
+              >
+                Send to {activeTeamName ?? "team"}
+              </button>
+            </div>
           </div>
         )}
       </div>
