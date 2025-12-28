@@ -1259,15 +1259,34 @@ export default function DashboardPage() {
                   {teamMessages.length === 0 && !chatLoading && (
                     <p className="text-sm text-slate-500">No messages yet. Start the conversation!</p>
                   )}
-                  {teamMessages.map((message) => (
-                    <div key={message.id} className="rounded-lg border border-orange-100 bg-orange-50/60 p-3">
-                      <div className="flex items-center justify-between text-xs text-slate-600">
-                        <p className="font-semibold text-orange-700">{message.author_name}</p>
-                        <span>{new Date(message.created_at).toLocaleString()}</span>
+                  {teamMessages.map((message) => {
+                    const isOwnMessage = message.user_id === userId;
+
+                    return (
+                      <div
+                        key={message.id}
+                        className={`rounded-lg border p-3 ${
+                          isOwnMessage
+                            ? "border-orange-200 bg-orange-100/80 shadow-inner"
+                            : "border-orange-100 bg-orange-50/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs text-slate-600">
+                          <p
+                            className={`font-semibold ${
+                              isOwnMessage ? "text-orange-800" : "text-orange-700"
+                            }`}
+                          >
+                            {message.author_name}
+                          </p>
+                          <span>{new Date(message.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className={`mt-1 text-sm ${isOwnMessage ? "text-slate-900" : "text-slate-800"}`}>
+                          {message.message}
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm text-slate-800">{message.message}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="space-y-2">
