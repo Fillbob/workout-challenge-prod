@@ -1106,6 +1106,40 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} lg:col-span-3 space-y-4 p-6`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Announcements</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Announcements</h2>
+                <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
+              </div>
+              {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
+            </div>
+            {announcements.length === 0 ? (
+              <p className="text-sm text-slate-500">No announcements yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {announcements.map((announcement) => (
+                  <li
+                    key={announcement.id}
+                    className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-orange-700">{announcement.author_name}</p>
+                        <p>{new Date(announcement.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
+                    <p className="text-sm text-slate-700">{announcement.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1301,38 +1335,6 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className={`${cardClass} space-y-4 p-6`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-orange-600">Announcements</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Headlines for everyone</h2>
-                <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
-              </div>
-              {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
-            </div>
-            {announcements.length === 0 ? (
-              <p className="text-sm text-slate-500">No announcements yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {announcements.map((announcement) => (
-                  <li
-                    key={announcement.id}
-                    className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-                      <div className="space-y-1">
-                        <p className="font-semibold text-orange-700">{announcement.author_name}</p>
-                        <p>{new Date(announcement.created_at).toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
-                    <p className="text-sm text-slate-700">{announcement.body}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
         </section>
 
