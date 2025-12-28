@@ -492,9 +492,19 @@ export default function DashboardPage() {
     loadTeamMessages(activeTeamId);
     if (!activeTeamId) return;
 
-    const interval = window.setInterval(() => loadTeamMessages(activeTeamId), 15000);
-    return () => window.clearInterval(interval);
-  }, [activeTeamId, loadTeamMessages]);
+    const channel = supabase
+      .channel(`team-messages-${activeTeamId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "team_messages", filter: `team_id=eq.${activeTeamId}` },
+        () => loadTeamMessages(activeTeamId),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTeamId, loadTeamMessages, supabase]);
 
   const handleProfileSave = async () => {
     if (!userId) return;
