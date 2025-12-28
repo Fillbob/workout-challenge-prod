@@ -74,8 +74,11 @@ interface TeamMessage {
 
 interface ChallengeClosingInfo {
   isEditable: boolean;
+  isLocked: boolean;
+  isUpcoming: boolean;
   closingLabel: string;
   lockDateLabel: string | null;
+  startDateLabel: string | null;
   daysUntilClose: number | null;
 }
 
@@ -83,8 +86,11 @@ const MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
 const EDIT_GRACE_PERIOD_DAYS = 2;
 const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
   isEditable: true,
+  isLocked: false,
+  isUpcoming: false,
   closingLabel: "Loading challenge timing...",
   lockDateLabel: null,
+  startDateLabel: null,
   daysUntilClose: null,
 };
 
@@ -102,25 +108,54 @@ function addDays(date: Date, days: number) {
 }
 
 function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClosingInfo {
+  const startDate = parseDateSafe(challenge.start_date);
   const endDate = parseDateSafe(challenge.end_date);
+  const startDateLabel = startDate
+    ? startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
+
+  if (startDate && now < startDate) {
+    const timeUntilStart = startDate.getTime() - now.getTime();
+    const daysUntilStart = Math.max(0, Math.ceil(timeUntilStart / MILLISECONDS_IN_DAY));
+
+    return {
+      isEditable: false,
+      isLocked: false,
+      isUpcoming: true,
+      closingLabel:
+        daysUntilStart === 0
+          ? "Opens today"
+          : `Opens in ${daysUntilStart} day${daysUntilStart === 1 ? "" : "s"}`,
+      lockDateLabel: null,
+      startDateLabel,
+      daysUntilClose: null,
+    };
+  }
 
   if (!endDate) {
     return {
       isEditable: true,
+      isLocked: false,
+      isUpcoming: false,
       closingLabel: "Closing date not set",
       lockDateLabel: null,
+      startDateLabel,
       daysUntilClose: null,
     };
   }
 
   const lockDate = addDays(endDate, EDIT_GRACE_PERIOD_DAYS);
+  const isLocked = now > lockDate;
   const timeRemaining = lockDate.getTime() - now.getTime();
   const daysUntilClose = Math.max(0, Math.ceil(timeRemaining / MILLISECONDS_IN_DAY));
 
   return {
     isEditable: timeRemaining >= 0,
+    isLocked,
+    isUpcoming: false,
     closingLabel: timeRemaining >= 0 ? `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}` : "Closed",
     lockDateLabel: lockDate.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    startDateLabel,
     daysUntilClose,
   };
 }
@@ -762,7 +797,7 @@ export default function DashboardPage() {
 
     visibleChallenges.forEach((challenge) => {
       const closingInfo = getChallengeClosingInfo(challenge, currentTime);
-      if (closingInfo.isEditable) {
+      if (!closingInfo.isLocked) {
         open.push(challenge);
       } else {
         closed.push(challenge);
@@ -801,6 +836,16 @@ export default function DashboardPage() {
 
   const toggleChallenge = (challenge: Challenge, checked: boolean) => {
     const closingInfo = getChallengeClosingInfo(challenge, new Date());
+
+    if (closingInfo.isUpcoming) {
+      setSaveStatus({
+        message: closingInfo.startDateLabel
+          ? `This challenge starts ${closingInfo.startDateLabel}. You can mark it completed after it begins.`
+          : "This challenge hasn't started yet.",
+        tone: "error",
+      });
+      return;
+    }
 
     if (!closingInfo.isEditable) {
       setSaveStatus({ message: "This challenge is locked and can no longer be edited.", tone: "error" });
@@ -1102,6 +1147,15 @@ export default function DashboardPage() {
                   ? getChallengeClosingInfo(challenge, currentTime)
                   : FALLBACK_CLOSING_INFO;
                 const toggleDisabled = !closingInfo.isEditable;
+                const statusDetail = closingInfo.isUpcoming
+                  ? closingInfo.startDateLabel
+                    ? `Opens ${closingInfo.startDateLabel}. You can mark completion after it begins.`
+                    : "This challenge hasn't started yet."
+                  : closingInfo.isEditable
+                    ? closingInfo.lockDateLabel
+                      ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
+                      : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
+                    : "Edits are locked for this challenge.";
 
                 return (
                   <div
@@ -1149,21 +1203,15 @@ export default function DashboardPage() {
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                         <span
-                          className={`rounded-full border px-2 py-1 ${
-                            closingInfo.isEditable
-                              ? "border-orange-200 bg-orange-100 text-orange-700"
-                              : "border-slate-200 bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {closingInfo.closingLabel}
-                        </span>
-                        <span className="text-slate-500">
-                          {closingInfo.isEditable
-                            ? closingInfo.lockDateLabel
-                              ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
-                              : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
-                            : "Edits are locked for this challenge."}
-                        </span>
+                        className={`rounded-full border px-2 py-1 ${
+                          closingInfo.isEditable
+                            ? "border-orange-200 bg-orange-100 text-orange-700"
+                            : "border-slate-200 bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {closingInfo.closingLabel}
+                      </span>
+                        <span className="text-slate-500">{statusDetail}</span>
                       </div>
                     </div>
                   </div>
