@@ -894,36 +894,7 @@ export default function DashboardPage() {
         </header>
 
         <section className="grid gap-4 lg:grid-cols-3">
-          <div className={`${cardClass} space-y-4 bg-gradient-to-br from-orange-100 via-white to-amber-100 p-6`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-semibold text-orange-600">Points</p>
-                <h2 className="text-4xl font-semibold text-slate-900">{totalPoints}</h2>
-                <p className="text-slate-600 text-sm">Points earned from completed challenges.</p>
-              </div>
-              <span className="rounded-full border border-orange-200 bg-white/70 px-3 py-1 text-xs font-semibold text-orange-700">
-                {weeklyPoints.length} weeks tracked
-              </span>
-            </div>
-            <div className="rounded-xl border border-orange-100 bg-white/80 p-4">
-              {weeklyPoints.length === 0 ? (
-                <p className="text-sm text-slate-500">Complete challenges to see your trend.</p>
-              ) : (
-                <LineChart data={weeklyPoints} />
-              )}
-            </div>
-            {weeklyPoints.length > 0 && (
-              <div className="flex flex-wrap gap-2 text-xs text-orange-700">
-                {weeklyPoints.map((entry) => (
-                  <span key={entry.week} className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1">
-                    Week {entry.week}: {entry.points} pts
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
+          <div className={`${cardClass} space-y-4 p-6`}>
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-orange-600">Weekly challenges</p>
@@ -954,86 +925,32 @@ export default function DashboardPage() {
               <p>Active team: {activeTeamName ?? "None selected"}</p>
             </div>
           </div>
-        </section>
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
-            <div className="flex items-center justify-between gap-3">
+          <div className={`${cardClass} lg:col-span-2 space-y-4 bg-gradient-to-br from-orange-100 via-white to-amber-100 p-6`}>
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Announcements</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Headlines for everyone</h2>
-                <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
+                <p className="text-sm font-semibold text-orange-600">Points</p>
+                <h2 className="text-4xl font-semibold text-slate-900">{totalPoints}</h2>
+                <p className="text-slate-600 text-sm">Points earned from completed challenges.</p>
               </div>
-              {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
+              <span className="rounded-full border border-orange-200 bg-white/70 px-3 py-1 text-xs font-semibold text-orange-700">
+                {weeklyPoints.length} weeks tracked
+              </span>
             </div>
-            {announcements.length === 0 ? (
-              <p className="text-sm text-slate-500">No announcements yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {announcements.map((announcement) => (
-                  <li
-                    key={announcement.id}
-                    className="rounded-xl border border-orange-100 bg-orange-50/60 p-4 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-                      <div className="space-y-1">
-                        <p className="font-semibold text-orange-700">{announcement.author_name}</p>
-                        <p>{new Date(announcement.created_at).toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
-                    <p className="text-sm text-slate-700">{announcement.body}</p>
-                  </li>
+            <div className="rounded-xl border border-orange-100 bg-white/80 p-4">
+              {weeklyPoints.length === 0 ? (
+                <p className="text-sm text-slate-500">Complete challenges to see your trend.</p>
+              ) : (
+                <LineChart data={weeklyPoints} />
+              )}
+            </div>
+            {weeklyPoints.length > 0 && (
+              <div className="flex flex-wrap gap-2 text-xs text-orange-700">
+                {weeklyPoints.map((entry) => (
+                  <span key={entry.week} className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1">
+                    Week {entry.week}: {entry.points} pts
+                  </span>
                 ))}
-              </ul>
-            )}
-          </div>
-
-          <div className={`${cardClass} space-y-4 p-6`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-orange-600">Team chat</p>
-                <h2 className="text-xl font-semibold text-slate-900">Say hello to your team</h2>
-                <p className="text-sm text-slate-600">Messages are visible to everyone on your active team.</p>
-              </div>
-              {chatStatus && <span className="text-sm font-medium text-orange-700">{chatStatus}</span>}
-            </div>
-
-            {!activeTeamId && <p className="text-sm text-slate-500">Set an active team to start chatting.</p>}
-
-            {activeTeamId && (
-              <div className="space-y-3">
-                <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-                  {chatLoading && <p className="text-sm text-slate-500">Loading chat...</p>}
-                  {teamMessages.length === 0 && !chatLoading && (
-                    <p className="text-sm text-slate-500">No messages yet. Start the conversation!</p>
-                  )}
-                  {teamMessages.map((message) => (
-                    <div key={message.id} className="rounded-lg border border-orange-100 bg-orange-50/60 p-3">
-                      <div className="flex items-center justify-between text-xs text-slate-600">
-                        <p className="font-semibold text-orange-700">{message.author_name}</p>
-                        <span>{new Date(message.created_at).toLocaleString()}</span>
-                      </div>
-                      <p className="mt-1 text-sm text-slate-800">{message.message}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-800">Send a message</label>
-                  <textarea
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
-                  >
-                    Send to {activeTeamName ?? "team"}
-                  </button>
-                </div>
               </div>
             )}
           </div>
@@ -1235,6 +1152,41 @@ export default function DashboardPage() {
           </div>
 
           <div className={`${cardClass} space-y-4 p-6`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Announcements</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Headlines for everyone</h2>
+                <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
+              </div>
+              {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
+            </div>
+            {announcements.length === 0 ? (
+              <p className="text-sm text-slate-500">No announcements yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {announcements.map((announcement) => (
+                  <li
+                    key={announcement.id}
+                    className="rounded-xl border border-orange-100 bg-orange-50/60 p-4 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-orange-700">{announcement.author_name}</p>
+                        <p>{new Date(announcement.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
+                    <p className="text-sm text-slate-700">{announcement.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-orange-600">Team activity</p>
@@ -1284,8 +1236,56 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-        </section>
 
+          <div className={`${cardClass} space-y-4 p-6`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-orange-600">Team chat</p>
+                <h2 className="text-xl font-semibold text-slate-900">Say hello to your team</h2>
+                <p className="text-sm text-slate-600">Messages are visible to everyone on your active team.</p>
+              </div>
+              {chatStatus && <span className="text-sm font-medium text-orange-700">{chatStatus}</span>}
+            </div>
+
+            {!activeTeamId && <p className="text-sm text-slate-500">Set an active team to start chatting.</p>}
+
+            {activeTeamId && (
+              <div className="space-y-3">
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {chatLoading && <p className="text-sm text-slate-500">Loading chat...</p>}
+                  {teamMessages.length === 0 && !chatLoading && (
+                    <p className="text-sm text-slate-500">No messages yet. Start the conversation!</p>
+                  )}
+                  {teamMessages.map((message) => (
+                    <div key={message.id} className="rounded-lg border border-orange-100 bg-orange-50/60 p-3">
+                      <div className="flex items-center justify-between text-xs text-slate-600">
+                        <p className="font-semibold text-orange-700">{message.author_name}</p>
+                        <span>{new Date(message.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-800">{message.message}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-800">Send a message</label>
+                  <textarea
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
+                  >
+                    Send to {activeTeamName ?? "team"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
         <section className="grid gap-4 lg:grid-cols-3">
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
