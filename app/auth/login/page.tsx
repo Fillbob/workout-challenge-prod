@@ -10,7 +10,7 @@ export default function Page() {
           </p>
           <h1 className="text-3xl font-semibold text-white">Welcome back</h1>
           <p className="text-slate-300">
-            Log in to track your workouts, join your team, and climb the leaderboard.
+            Log in to track your workouts, join your group, and climb the leaderboard.
           </p>
         </div>
 
