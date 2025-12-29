@@ -3,12 +3,9 @@
 import { useRequireUser } from "@/lib/auth";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
-interface TeamRow {
-  team_id: string;
-  teams: {
-    id: string;
-    name: string;
-  }[];
+interface PublicTeam {
+  id: string;
+  name: string;
 }
 
 interface LeaderboardRow {
@@ -41,7 +38,7 @@ const getInitials = (name: string) =>
 
 export default function LeaderboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [teams, setTeams] = useState<TeamRow[]>([]);
+  const [teams, setTeams] = useState<PublicTeam[]>([]);
   const [activeTeam, setActiveTeam] = useState<string | null>(null);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -57,30 +54,21 @@ export default function LeaderboardPage() {
 
   const loadTeams = useCallback(async () => {
     try {
-      const response = await fetch("/api/teams/memberships");
+      const response = await fetch("/api/teams/public");
       const payload = await response.json();
 
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load teams");
       }
 
-      const normalizedTeams: TeamRow[] = (payload.teams ?? []).map(
-        (row: { team_id: string; teams?: { id: string; name: string } | { id: string; name: string }[] }) => {
-          const nested = row.teams;
-          const parsedTeams = Array.isArray(nested)
-            ? nested.map((team) => ({ id: String(team.id), name: String(team.name) }))
-            : nested
-              ? [{ id: String(nested.id), name: String(nested.name) }]
-              : [];
-
-          return {
-            team_id: String(row.team_id),
-            teams: parsedTeams,
-          };
-        },
+      const normalizedTeams: PublicTeam[] = (payload.teams ?? []).map(
+        (row: { id?: string; name?: string }) => ({
+          id: String(row.id ?? ""),
+          name: String(row.name ?? "Unnamed team"),
+        }),
       );
 
-      setTeams(normalizedTeams);
+      setTeams(normalizedTeams.filter((team) => Boolean(team.id)));
       setStatus(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to load teams");
@@ -166,7 +154,7 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     if (activeTeam && teams.length > 0) {
-      const knownIds = teams.flatMap((entry) => entry.teams.map((team) => team.id ?? entry.team_id));
+      const knownIds = teams.map((team) => team.id);
       if (!knownIds.includes(activeTeam)) {
         setActiveTeam(null);
       }
@@ -179,7 +167,7 @@ export default function LeaderboardPage() {
       return;
     }
 
-    const firstTeamId = teams[0].teams[0]?.id ?? teams[0].team_id;
+    const firstTeamId = teams[0]?.id;
     if (firstTeamId) {
       setActiveTeam(firstTeamId);
       window.localStorage.setItem("activeTeamId", firstTeamId);
@@ -232,13 +220,13 @@ export default function LeaderboardPage() {
                 <p className="text-xs text-slate-500">Switch tabs to browse each leaderboard.</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                {teams.map((row) => {
-                  const id = row.teams[0]?.id ?? row.team_id;
-                  const name = row.teams[0]?.name ?? "Unnamed team";
+                {teams.map((team) => {
+                  const id = team.id;
+                  const name = team.name || "Unnamed team";
                   const isActive = activeTeam === id;
                   return (
                     <button
-                      key={row.team_id}
+                      key={id}
                       onClick={() => handleTeamChange(id)}
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                         isActive
