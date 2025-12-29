@@ -95,7 +95,7 @@ export async function GET(request: Request) {
 
   const { data: challengeRows, error: challengeError } = await admin
     .from("challenges")
-    .select("id, team_ids");
+    .select("id, team_ids, hidden");
 
   if (challengeError) {
     return NextResponse.json({ error: challengeError.message }, { status: 400 });
@@ -104,9 +104,10 @@ export async function GET(request: Request) {
   const allowedChallengeIds = (challengeRows ?? [])
     .filter(
       (challenge) =>
-        !challenge.team_ids ||
-        challenge.team_ids.length === 0 ||
-        (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId)),
+        !challenge.hidden &&
+        (!challenge.team_ids ||
+          challenge.team_ids.length === 0 ||
+          (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId))),
     )
     .map((challenge) => challenge.id);
 

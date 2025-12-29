@@ -14,6 +14,7 @@ interface Challenge {
   end_date: string | null;
   base_points: number;
   team_ids: string[] | null;
+  hidden?: boolean;
 }
 
 interface AdminTeam {
@@ -41,6 +42,7 @@ const emptyForm: Omit<Challenge, "id"> = {
   end_date: null,
   base_points: 10,
   team_ids: [],
+  hidden: false,
 };
 
 export default function AdminPage() {
@@ -76,6 +78,7 @@ export default function AdminPage() {
         ? Number(challenge.challenge_index)
         : 1,
       team_ids: challenge.team_ids ?? [],
+      hidden: Boolean(challenge.hidden),
     }));
     setChallenges(normalized as Challenge[]);
   }, [setChallenges, setStatus, supabase]);
@@ -318,6 +321,7 @@ export default function AdminPage() {
       end_date: challenge.end_date,
       base_points: challenge.base_points,
       team_ids: challenge.team_ids ?? [],
+      hidden: Boolean(challenge.hidden),
     });
   };
 
@@ -562,6 +566,15 @@ export default function AdminPage() {
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                   />
                 </label>
+                <label className="flex items-center gap-3 text-sm md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.hidden)}
+                    onChange={(e) => setForm({ ...form, hidden: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-indigo-500"
+                  />
+                  <span className="text-slate-200">Hide this challenge from participants</span>
+                </label>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">Limit to teams (optional)</p>
@@ -607,26 +620,28 @@ export default function AdminPage() {
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-slate-800 text-slate-300">
-                  <tr>
-                    <th className="p-3 text-left">Week</th>
-                    <th className="p-3 text-left">Challenge #</th>
-                    <th className="p-3 text-left">Title</th>
-                    <th className="p-3 text-left">Teams</th>
-                    <th className="p-3 text-left">Points</th>
-                    <th className="p-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {challenges.map((challenge) => (
-                    <tr key={challenge.id} className="border-t border-slate-800">
-                      <td className="p-3">{challenge.week_index}</td>
-                      <td className="p-3">{challenge.challenge_index}</td>
-                      <td className="p-3">{challenge.title}</td>
-                      <td className="p-3 text-slate-300">
-                        {challenge.team_ids?.length
-                          ? challenge.team_ids
-                              .map((id) => teams.find((team) => team.id === id)?.name ?? id)
-                              .join(", ")
+                    <tr>
+                      <th className="p-3 text-left">Week</th>
+                      <th className="p-3 text-left">Challenge #</th>
+                      <th className="p-3 text-left">Title</th>
+                      <th className="p-3 text-left">Visibility</th>
+                      <th className="p-3 text-left">Teams</th>
+                      <th className="p-3 text-left">Points</th>
+                      <th className="p-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {challenges.map((challenge) => (
+                      <tr key={challenge.id} className="border-t border-slate-800">
+                        <td className="p-3">{challenge.week_index}</td>
+                        <td className="p-3">{challenge.challenge_index}</td>
+                        <td className="p-3">{challenge.title}</td>
+                        <td className="p-3 text-slate-300">{challenge.hidden ? "Hidden" : "Visible"}</td>
+                        <td className="p-3 text-slate-300">
+                          {challenge.team_ids?.length
+                            ? challenge.team_ids
+                                .map((id) => teams.find((team) => team.id === id)?.name ?? id)
+                                .join(", ")
                           : "All teams"}
                       </td>
                       <td className="p-3">{challenge.base_points}</td>
@@ -642,7 +657,7 @@ export default function AdminPage() {
                   ))}
                   {challenges.length === 0 && (
                     <tr>
-                      <td className="p-3" colSpan={6}>
+                      <td className="p-3" colSpan={7}>
                         <p className="text-slate-500">No challenges created yet.</p>
                       </td>
                     </tr>
