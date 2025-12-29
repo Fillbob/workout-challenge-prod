@@ -1,6 +1,7 @@
 "use client";
 
 import { useRequireAdmin } from "@/lib/auth";
+import { DEFAULT_AUTH_MESSAGE } from "@/lib/auth-page-message";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useState } from "react";
 
@@ -59,6 +60,9 @@ export default function AdminPage() {
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [announcementLoadingIds, setAnnouncementLoadingIds] = useState<Set<string>>(new Set());
+  const [authPageMessage, setAuthPageMessage] = useState("");
+  const [authPageMessageStatus, setAuthPageMessageStatus] = useState<string | null>(null);
+  const [isSavingAuthPageMessage, setIsSavingAuthPageMessage] = useState(false);
 
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
@@ -97,6 +101,23 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadAuthPageMessage = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth-message");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load welcome message");
+      }
+
+      setAuthPageMessage(payload.message ?? "");
+      setAuthPageMessageStatus(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load welcome message";
+      setAuthPageMessageStatus(message);
+    }
+  }, []);
+
   const loadTeams = useCallback(async () => {
     try {
       const response = await fetch("/api/admin/teams");
@@ -124,7 +145,8 @@ export default function AdminPage() {
     loadChallenges();
     loadTeams();
     loadAnnouncements();
-  }, [isAuthed, loadChallenges, loadTeams, loadAnnouncements]);
+    loadAuthPageMessage();
+  }, [isAuthed, loadChallenges, loadTeams, loadAnnouncements, loadAuthPageMessage]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -199,6 +221,40 @@ export default function AdminPage() {
       setAnnouncementStatus(message);
     } finally {
       setIsPostingAnnouncement(false);
+    }
+  };
+
+  const handleAuthPageMessageSubmit = async () => {
+    const message = authPageMessage.trim();
+
+    if (!message) {
+      setAuthPageMessageStatus("A message is required");
+      return;
+    }
+
+    setIsSavingAuthPageMessage(true);
+    setAuthPageMessageStatus(null);
+
+    try {
+      const response = await fetch("/api/auth-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to save message");
+      }
+
+      setAuthPageMessage(payload.message ?? message);
+      setAuthPageMessageStatus("Message updated");
+    } catch (error) {
+      const statusMessage = error instanceof Error ? error.message : "Unable to save message";
+      setAuthPageMessageStatus(statusMessage);
+    } finally {
+      setIsSavingAuthPageMessage(false);
     }
   };
 
@@ -355,6 +411,40 @@ export default function AdminPage() {
         {role === "mod" && (
           <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-sm text-indigo-100">
             You have moderator access. You can publish announcements, but only admins can edit teams and challenges.
+          </div>
+        )}
+
+        {role === "admin" && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-indigo-400">Welcome message</p>
+                <h2 className="text-2xl font-semibold">Control the login & sign-up note</h2>
+                <p className="text-sm text-slate-400">
+                  Add a short reminder for honesty that will be displayed on the authentication screens.
+                </p>
+              </div>
+              {authPageMessageStatus && <p className="text-sm text-rose-400">{authPageMessageStatus}</p>}
+            </div>
+
+            <textarea
+              value={authPageMessage}
+              onChange={(e) => setAuthPageMessage(e.target.value)}
+              placeholder={DEFAULT_AUTH_MESSAGE}
+              rows={3}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+            />
+
+            <div className="flex items-center gap-3 text-sm">
+              <button
+                onClick={handleAuthPageMessageSubmit}
+                disabled={isSavingAuthPageMessage}
+                className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white px-4 py-2 rounded-lg"
+              >
+                {isSavingAuthPageMessage ? "Saving..." : "Save welcome message"}
+              </button>
+              <p className="text-slate-400">Users see this message on the login and sign-up screens.</p>
+            </div>
           </div>
         )}
 
