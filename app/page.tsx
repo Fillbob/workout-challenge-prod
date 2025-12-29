@@ -30,7 +30,7 @@ export default function Home() {
 
     const { data: existing, error } = await supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name, profile_icon")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -41,17 +41,23 @@ export default function Home() {
     if (!existing) {
       await supabase
         .from("profiles")
-        .insert({ id: user.id, display_name: derivedName, role: "user" })
+        .insert({ id: user.id, display_name: derivedName, role: "user", profile_icon: "flame" })
         .throwOnError();
       return;
     }
 
+    const updates: Record<string, string> = {};
+
     if (!existing.display_name) {
-      await supabase
-        .from("profiles")
-        .update({ display_name: derivedName })
-        .eq("id", user.id)
-        .throwOnError();
+      updates.display_name = derivedName;
+    }
+
+    if (!existing.profile_icon) {
+      updates.profile_icon = "flame";
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await supabase.from("profiles").update(updates).eq("id", user.id).throwOnError();
     }
   };
 

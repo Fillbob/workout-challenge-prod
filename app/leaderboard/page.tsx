@@ -1,7 +1,8 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { getProfileIcon } from "@/lib/profileIcons";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface TeamRow {
   team_id: string;
@@ -16,6 +17,7 @@ interface LeaderboardRow {
   name: string;
   points: number;
   completed_count: number;
+  icon?: string | null;
 }
 
 interface ContributionRow {
@@ -31,13 +33,35 @@ const tierStyles = [
   "from-amber-200 via-orange-200 to-amber-100 text-amber-900 shadow-orange-100",
 ];
 
-const getInitials = (name: string) =>
-  name
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase())
-    .slice(0, 2)
-    .join("") || "?";
+const laneGradients = [
+  "from-orange-500 via-amber-400 to-rose-400",
+  "from-amber-400 via-orange-400 to-amber-300",
+  "from-amber-200 via-orange-200 to-rose-200",
+  "from-rose-400 via-orange-400 to-amber-300",
+  "from-amber-300 via-orange-300 to-rose-300",
+  "from-yellow-300 via-amber-400 to-orange-500",
+  "from-sky-300 via-blue-300 to-emerald-200",
+  "from-amber-300 via-orange-400 to-pink-400",
+];
+
+const avatarSize = {
+  sm: "h-9 w-9 text-base",
+  md: "h-12 w-12 text-xl",
+  lg: "h-14 w-14 text-2xl",
+};
+
+const ProfileCircle = ({ iconId, name, size = "md" }: { iconId?: string | null; name: string; size?: keyof typeof avatarSize }) => {
+  const icon = useMemo(() => getProfileIcon(iconId), [iconId]);
+  return (
+    <div
+      className={`flex items-center justify-center rounded-full bg-gradient-to-br ${icon.gradient} ${avatarSize[size]} shadow-inner shadow-orange-100`}
+      role="img"
+      aria-label={`${name}'s icon: ${icon.label}`}
+    >
+      <span className={icon.accent}>{icon.glyph}</span>
+    </div>
+  );
+};
 
 export default function LeaderboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -50,6 +74,7 @@ export default function LeaderboardPage() {
   const [activityHasMore, setActivityHasMore] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [focusedUser, setFocusedUser] = useState<string | null>(null);
 
   const activityOffsetRef = useRef(0);
 
@@ -203,6 +228,13 @@ export default function LeaderboardPage() {
     return new Date(value).toLocaleString();
   };
 
+  const maxPoints = useMemo(() => (rows.length > 0 ? Math.max(...rows.map((row) => row.points)) : 0), [rows]);
+  const axisLimit = useMemo(() => Math.max(50, Math.ceil(Math.max(maxPoints, 1) / 50) * 50), [maxPoints]);
+  const axisTicks = useMemo(
+    () => Array.from({ length: Math.floor(axisLimit / 50) + 1 }, (_, idx) => idx * 50),
+    [axisLimit],
+  );
+
   const topPerformer = rows[0];
 
   return (
@@ -263,9 +295,7 @@ export default function LeaderboardPage() {
                 <div className="rounded-2xl bg-white/30 p-4 shadow-inner shadow-amber-200/40 backdrop-blur">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">Current leader</p>
                   <div className="mt-3 flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-800/70 text-lg font-bold text-amber-50">
-                      {topPerformer ? getInitials(topPerformer.name) : "--"}
-                    </div>
+                    <ProfileCircle iconId={topPerformer?.icon} name={topPerformer?.name ?? "Current leader"} size="md" />
                     <div>
                       <p className="text-lg font-semibold">{topPerformer?.name ?? "No scores yet"}</p>
                       <p className="text-sm text-amber-900/80">
@@ -290,7 +320,89 @@ export default function LeaderboardPage() {
                 </div>
               </div>
 
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-3 space-y-4">
+                <div className="rounded-3xl border border-orange-100 bg-white/80 p-5 shadow-lg shadow-orange-100/70 backdrop-blur">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-orange-600">Race view</p>
+                      <h3 className="text-xl font-semibold text-slate-900">Horse race tracker</h3>
+                      <p className="text-sm text-slate-600">Follow every athlete’s pace with icons on the track.</p>
+                    </div>
+                    <p className="text-xs text-slate-500">Click an icon to spotlight their lane.</p>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {rows.map((row, idx) => {
+                      const gradient = laneGradients[idx % laneGradients.length];
+                      const fill = Math.min(100, (row.points / axisLimit) * 100);
+                      const isFocused = focusedUser === row.user_id;
+                      return (
+                        <div
+                          key={row.user_id}
+                          className={`rounded-2xl border border-orange-100/70 bg-white/80 p-3 transition ${
+                            isFocused ? "ring-2 ring-orange-300 shadow-lg shadow-orange-100" : "shadow-sm shadow-orange-50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
+                              className="transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                            >
+                              <ProfileCircle iconId={row.icon} name={row.name} size="md" />
+                            </button>
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                                  {isFocused && (
+                                    <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                      Spotlighted
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm font-semibold text-orange-700">{row.points} pts</p>
+                              </div>
+                              <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
+                                  style={{ width: `${fill}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-slate-500">
+                                <span>{row.completed_count} completions</span>
+                                <span>{Math.round(fill)}% of {axisLimit} pt lane</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {rows.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
+                        No racers yet. Complete a challenge to join the track.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                      <span>Start</span>
+                      <span>{axisLimit} pts</span>
+                    </div>
+                    <div className="relative h-10 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white">
+                      <div className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 justify-between">
+                        {axisTicks.map((tick) => (
+                          <div key={tick} className="flex flex-col items-center gap-1 text-[11px] text-slate-500">
+                            <span className="h-4 w-px bg-orange-200" />
+                            <span>{tick}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-3">
                   {rows.map((row, idx) => {
                     const isExpanded = expandedUser === row.user_id;
@@ -309,6 +421,7 @@ export default function LeaderboardPage() {
                             >
                               #{idx + 1}
                             </div>
+                            <ProfileCircle iconId={row.icon} name={row.name} size="md" />
                             <div className="flex-1">
                               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
