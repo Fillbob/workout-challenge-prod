@@ -1,6 +1,7 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
+import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 interface TeamRow {
@@ -50,8 +51,10 @@ export default function LeaderboardPage() {
   const [activityHasMore, setActivityHasMore] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [positionChanges, setPositionChanges] = useState<Record<string, number>>({});
 
   const activityOffsetRef = useRef(0);
+  const previousRowsRef = useRef<LeaderboardRow[]>([]);
 
   const PAGE_SIZE = 15;
 
@@ -134,7 +137,24 @@ export default function LeaderboardPage() {
         const returnedContributions: Record<string, ContributionRow[]> = payload.contributions ?? {};
         const contributionCount = Object.values(returnedContributions).reduce((count, list) => count + list.length, 0);
 
-        setRows(payload.leaderboard ?? []);
+        const incomingLeaderboard: LeaderboardRow[] = payload.leaderboard ?? [];
+        const previousRankings = reset
+          ? new Map<string, number>()
+          : new Map(previousRowsRef.current.map((row, index) => [row.user_id, index]));
+
+        const movement: Record<string, number> = {};
+        incomingLeaderboard.forEach((row, index) => {
+          const previousIndex = previousRankings.get(row.user_id);
+          if (previousIndex === undefined) return;
+          const delta = previousIndex - index;
+          if (delta !== 0) {
+            movement[row.user_id] = delta;
+          }
+        });
+
+        setPositionChanges(movement);
+        setRows(incomingLeaderboard);
+        previousRowsRef.current = incomingLeaderboard;
         setContributions((prev) => appendContributions(prev, returnedContributions, reset));
         setActivityHasMore(Boolean(payload.hasMore));
         const nextOffset = offset + contributionCount;
@@ -296,6 +316,7 @@ export default function LeaderboardPage() {
                     const isExpanded = expandedUser === row.user_id;
                     const memberContributions = contributions[row.user_id] ?? [];
                     const rankStyle = tierStyles[idx] ?? "from-white via-amber-50 to-orange-50 text-slate-900";
+                    const change = positionChanges[row.user_id];
 
                     return (
                       <Fragment key={row.user_id}>
@@ -316,7 +337,35 @@ export default function LeaderboardPage() {
                                   <p className="text-xs text-slate-500">{row.completed_count} completions</p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-lg font-bold text-amber-700">{row.points} pts</p>
+                                  <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">
+                                    {row.points} pts
+                                    {change && (
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                                          change > 0
+                                            ? "border-green-100 bg-green-50 text-green-700"
+                                            : "border-rose-100 bg-rose-50 text-rose-700"
+                                        }`}
+                                      >
+                                        {Math.abs(change) === 1 ? (
+                                          change > 0 ? (
+                                            <ChevronUp className="h-4 w-4" aria-hidden />
+                                          ) : (
+                                            <ChevronDown className="h-4 w-4" aria-hidden />
+                                          )
+                                        ) : change > 0 ? (
+                                          <ChevronsUp className="h-4 w-4" aria-hidden />
+                                        ) : (
+                                          <ChevronsDown className="h-4 w-4" aria-hidden />
+                                        )}
+                                        <span className="sr-only">
+                                          {change > 0
+                                            ? `Moved up ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`
+                                            : `Moved down ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </p>
                                   <button
                                     onClick={() => setExpandedUser(isExpanded ? null : row.user_id)}
                                     className="text-xs font-semibold text-orange-600 underline underline-offset-4 transition hover:text-orange-700"
