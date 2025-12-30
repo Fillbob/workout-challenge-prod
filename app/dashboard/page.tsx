@@ -182,7 +182,7 @@ function readLocalTeams() {
       }))
       .filter((team) => team.id && team.name && team.join_code && team.owner_id);
   } catch (error) {
-    console.error("Unable to read local teams", error);
+    console.error("Unable to read local groups", error);
     return [] as LocalTeam[];
   }
 }
@@ -391,7 +391,7 @@ export default function DashboardPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "Unable to load teams");
+        throw new Error(payload.error || "Unable to load groups");
       }
 
       const normalizedTeams: TeamRow[] = (payload.teams ?? []).map((row: { team_id: string; teams?: TeamRow["team"] }) => ({
@@ -402,8 +402,8 @@ export default function DashboardPage() {
       setTeams(mergeTeams(local, normalizedTeams));
       setTeamStatus(null);
     } catch (error) {
-      console.warn("Falling back to local teams", error);
-      setTeamStatus(error instanceof Error ? error.message : "Unable to load teams");
+      console.warn("Falling back to local groups", error);
+      setTeamStatus(error instanceof Error ? error.message : "Unable to load groups");
       setTeams(local);
     }
   }, [userId]);
@@ -648,10 +648,10 @@ export default function DashboardPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to join team");
+        throw new Error(result.error || "Unable to join group");
       }
 
-      setTeamStatus("Joined team");
+      setTeamStatus("Joined group");
       setJoinCode("");
       if (result.team?.id) handleActiveTeamChange(String(result.team.id));
       loadTeams();
@@ -661,7 +661,7 @@ export default function DashboardPage() {
     }
 
     if (!userId) {
-      setTeamStatus("You must be signed in to join a team");
+      setTeamStatus("You must be signed in to join a group");
       return;
     }
 
@@ -671,7 +671,7 @@ export default function DashboardPage() {
     );
 
     if (!target) {
-      setTeamStatus("Team not found");
+      setTeamStatus("Group not found");
       return;
     }
 
@@ -679,7 +679,7 @@ export default function DashboardPage() {
     const nextTeams = local.map((team) => (team.id === target.id ? updated : team));
     writeLocalTeams(nextTeams);
     setTeams((prev) => mergeTeams(prev, [{ team_id: updated.id, team: updated }]));
-    setTeamStatus("Joined team");
+    setTeamStatus("Joined group");
     setJoinCode("");
     handleActiveTeamChange(updated.id);
   };
@@ -688,7 +688,7 @@ export default function DashboardPage() {
     setTeamStatus(null);
 
     if (!userId) {
-      setTeamStatus("You must be signed in to leave a team");
+      setTeamStatus("You must be signed in to leave a group");
       return;
     }
 
@@ -703,12 +703,12 @@ export default function DashboardPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to leave team");
+        throw new Error(result.error || "Unable to leave group");
       }
 
       leftServer = true;
     } catch (error) {
-      console.warn("Falling back to local team removal", error);
+      console.warn("Falling back to local group removal", error);
     }
 
     removeLocalMembership(teamId, userId);
@@ -730,12 +730,12 @@ export default function DashboardPage() {
       return merged;
     });
 
-    setTeamStatus(leftServer ? "Left team" : "Left team locally");
+    setTeamStatus(leftServer ? "Left group" : "Left group locally");
   };
 
   const handleSendMessage = async () => {
     if (!activeTeamId) {
-      setChatStatus("Set an active team to chat");
+      setChatStatus("Set an active group to chat");
       return;
     }
 
@@ -758,7 +758,7 @@ export default function DashboardPage() {
 
       if (!response.ok) {
         if (response.status === 403) {
-          setChatStatus("You must be a member of this team to chat");
+          setChatStatus("You must be a member of this group to chat");
           return;
         }
         throw new Error(payload.error || "Unable to send message");
@@ -1005,7 +1005,7 @@ export default function DashboardPage() {
               Welcome back{profileName ? `, ${profileName}` : ""}
             </h1>
             <p className="text-slate-600">
-              Track your teams, complete weekly challenges, and climb the leaderboard.
+              Track your groups, complete weekly challenges, and climb the leaderboard.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -1176,7 +1176,7 @@ export default function DashboardPage() {
             )}
             <div className="space-y-3">
               {openChallenges.length === 0 && (
-                <p className="text-sm text-slate-500">No active challenges available for your selected team yet.</p>
+                <p className="text-sm text-slate-500">No active challenges available for your selected group yet.</p>
               )}
               {openChallenges.map((challenge) => {
                 const checked = submissionState[challenge.id] || false;
@@ -1346,14 +1346,14 @@ export default function DashboardPage() {
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Team activity</p>
+                <p className="text-sm font-semibold text-orange-600">Group activity</p>
                 <h2 className="text-xl font-semibold text-slate-900">Recent submissions</h2>
                 <p className="text-sm text-slate-600">Last 7 days</p>
               </div>
               {recentStatus && <span className="text-sm font-medium text-rose-600">{recentStatus}</span>}
             </div>
 
-            {!activeTeamId && <p className="text-sm text-slate-500">Set an active team to see recent activity.</p>}
+            {!activeTeamId && <p className="text-sm text-slate-500">Set an active group to see recent activity.</p>}
 
             {activeTeamId && (
               <div className="space-y-3">
@@ -1428,8 +1428,8 @@ export default function DashboardPage() {
           <div className={`${cardClass} space-y-4 p-6`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Teams</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Join or switch teams</h2>
+                <p className="text-sm font-semibold text-orange-600">Groups</p>
+                <h2 className="text-2xl font-semibold text-slate-900">Join or switch groups</h2>
               </div>
               {teamStatus && <span className="text-sm font-medium text-orange-700">{teamStatus}</span>}
             </div>
@@ -1448,9 +1448,9 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="space-y-2">
-              <p className="text-sm text-slate-600">Your teams</p>
+              <p className="text-sm text-slate-600">Your groups</p>
               <div className="space-y-2">
-                {teams.length === 0 && <p className="text-sm text-slate-500">No teams yet.</p>}
+                {teams.length === 0 && <p className="text-sm text-slate-500">No groups yet.</p>}
                 {teams.map((row) => {
                   if (!row.team) return null;
 
@@ -1491,10 +1491,10 @@ export default function DashboardPage() {
 
         {activeTeamId && (
           <div className={`${cardClass} p-5`}>
-            <p className="text-sm font-semibold text-orange-600">Active team</p>
+            <p className="text-sm font-semibold text-orange-600">Active group</p>
             <h3 className="text-xl font-semibold text-slate-900">{activeTeamName}</h3>
             <p className="text-sm text-slate-600">
-              View team stats in the <a className="font-semibold text-orange-700" href="/leaderboard">leaderboard</a>.
+              View group stats in the <a className="font-semibold text-orange-700" href="/leaderboard">leaderboard</a>.
             </p>
           </div>
         )}
@@ -1517,7 +1517,7 @@ export default function DashboardPage() {
             <span className="absolute -right-1 -top-1 inline-flex h-3 w-3 animate-pulse rounded-full bg-white/90" />
             <span className="flex items-center gap-2">
               <span className="text-lg">💬</span>
-              Team chat
+              Group chat
             </span>
             {unreadCount > 0 && (
               <span className="flex min-w-[1.5rem] items-center justify-center rounded-full bg-white px-2 py-0.5 text-xs font-bold text-orange-600 shadow-inner">
@@ -1531,9 +1531,9 @@ export default function DashboardPage() {
           <div className="fixed bottom-24 right-6 z-50 w-[min(420px,calc(100%-2rem))] space-y-3 rounded-2xl border border-orange-100 bg-white/95 shadow-2xl shadow-orange-200 backdrop-blur">
             <div className="flex items-start justify-between gap-3 border-b border-orange-50 px-4 py-3">
               <div>
-                <p className="text-xs font-semibold text-orange-600">Team chat</p>
-                <p className="text-lg font-semibold text-slate-900">{activeTeamName ?? "Active team"}</p>
-                <p className="text-xs text-slate-600">Messages are visible to everyone on your active team.</p>
+                <p className="text-xs font-semibold text-orange-600">Group chat</p>
+                <p className="text-lg font-semibold text-slate-900">{activeTeamName ?? "Active group"}</p>
+                <p className="text-xs text-slate-600">Messages are visible to everyone in your active group.</p>
               </div>
               <button
                 type="button"
@@ -1591,7 +1591,7 @@ export default function DashboardPage() {
                 onClick={handleSendMessage}
                 className="inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
               >
-                Send to {activeTeamName ?? "team"}
+                Send to {activeTeamName ?? "group"}
               </button>
             </div>
           </div>

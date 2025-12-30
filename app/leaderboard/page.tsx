@@ -61,7 +61,7 @@ export default function LeaderboardPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "Unable to load teams");
+        throw new Error(payload.error || "Unable to load groups");
       }
 
       const normalizedTeams: PublicTeam[] = (payload.teams ?? []).map(
@@ -74,7 +74,7 @@ export default function LeaderboardPage() {
       setTeams(normalizedTeams.filter((team) => Boolean(team.id)));
       setStatus(null);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unable to load teams");
+      setStatus(error instanceof Error ? error.message : "Unable to load groups");
     }
   }, []);
 
@@ -182,7 +182,7 @@ export default function LeaderboardPage() {
 
     if (activeTeam || teams.length === 0) {
       if (teams.length === 0) {
-        setStatus("Join or create a team to see the leaderboard.");
+        setStatus("Join or create a group to see the leaderboard.");
       }
       return;
     }
@@ -219,7 +219,7 @@ export default function LeaderboardPage() {
         <div className="flex flex-col gap-4 rounded-3xl bg-white/70 p-6 shadow-xl shadow-orange-100/60 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Leaderboard</p>
-            <h1 className="text-3xl font-semibold text-slate-900">Team rankings</h1>
+            <h1 className="text-3xl font-semibold text-slate-900">Group rankings</h1>
             <p className="mt-2 text-sm text-slate-600">
               Celebrate your squad and follow every contribution in a warm, card-first layout.
             </p>
@@ -236,7 +236,7 @@ export default function LeaderboardPage() {
           <div className="rounded-3xl bg-white/80 p-4 shadow-lg shadow-orange-100/70 backdrop-blur">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-medium text-amber-700">Choose a team</p>
+                <p className="text-sm font-medium text-amber-700">Choose a group</p>
                 <p className="text-xs text-slate-500">Switch tabs to browse each leaderboard.</p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -259,7 +259,7 @@ export default function LeaderboardPage() {
                     </button>
                   );
                 })}
-                {teams.length === 0 && <span className="text-sm text-slate-500">No teams yet</span>}
+                {teams.length === 0 && <span className="text-sm text-slate-500">No groups yet</span>}
               </div>
             </div>
             {status && <p className="mt-3 text-sm text-rose-500">{status}</p>}
@@ -288,7 +288,7 @@ export default function LeaderboardPage() {
                   <div className="rounded-2xl bg-white/40 p-4 backdrop-blur">
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Participants</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{rows.length}</p>
-                    <p className="text-xs text-amber-900/80">Active teammates logged.</p>
+                    <p className="text-xs text-amber-900/80">Active group members logged.</p>
                   </div>
                   <div className="rounded-2xl bg-white/40 p-4 backdrop-blur">
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Submissions</p>
@@ -393,7 +393,7 @@ export default function LeaderboardPage() {
                   })}
                   {rows.length === 0 && (
                     <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
-                      No data yet for this team.
+                      No data yet for this group.
                     </div>
                   )}
                 </div>
@@ -416,7 +416,7 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-slate-600 shadow-inner shadow-orange-100">
-              Join or create a team to see the leaderboard.
+              Join or create a group to see the leaderboard.
             </div>
           )}
         </div>

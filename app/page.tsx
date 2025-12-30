@@ -110,7 +110,7 @@ export default function Home() {
             Compete. Collaborate. Grow stronger.
           </h1>
           <p className="text-lg text-slate-600">
-            Log in or create an account to join teams, tackle weekly challenges, and climb the leaderboard with your crew.
+            Log in or create an account to join groups, tackle weekly challenges, and climb the leaderboard with your crew.
           </p>
           <ul className="mt-4 space-y-2 text-slate-700">
             <li className="flex items-start gap-3">
@@ -123,7 +123,7 @@ export default function Home() {
               <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-sm font-semibold text-white">
                 2
               </span>
-              <span>Earn points for your team and climb the leaderboard.</span>
+              <span>Earn points for your group and climb the leaderboard.</span>
             </li>
             <li className="flex items-start gap-3">
               <span className="mt-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-sm font-semibold text-white">
@@ -141,7 +141,7 @@ export default function Home() {
             </span>
             <h1 className="text-3xl font-semibold text-slate-900">Welcome back</h1>
             <p className="text-slate-600">
-              Log in or create an account to join teams, tackle weekly challenges, and climb the leaderboard with your crew.
+              Log in or create an account to join groups, tackle weekly challenges, and climb the leaderboard with your crew.
             </p>
           </div>
 

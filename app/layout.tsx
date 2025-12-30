@@ -10,7 +10,7 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Workout Challenge",
-  description: "Track workouts, join teams, and compete in weekly challenges.",
+  description: "Track workouts, join groups, and compete in weekly challenges.",
 };
 
 const geistSans = Geist({
