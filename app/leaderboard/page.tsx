@@ -1,15 +1,12 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
-import { getProfileIcon } from "@/lib/profileIcons";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
-interface TeamRow {
-  team_id: string;
-  teams: {
-    id: string;
-    name: string;
-  }[];
+interface PublicTeam {
+  id: string;
+  name: string;
 }
 
 interface LeaderboardRow {
@@ -65,7 +62,7 @@ const ProfileCircle = ({ iconId, name, size = "md" }: { iconId?: string | null; 
 
 export default function LeaderboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [teams, setTeams] = useState<TeamRow[]>([]);
+  const [teams, setTeams] = useState<PublicTeam[]>([]);
   const [activeTeam, setActiveTeam] = useState<string | null>(null);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -74,38 +71,30 @@ export default function LeaderboardPage() {
   const [activityHasMore, setActivityHasMore] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
-  const [focusedUser, setFocusedUser] = useState<string | null>(null);
+  const [positionChanges, setPositionChanges] = useState<Record<string, number>>({});
 
   const activityOffsetRef = useRef(0);
+  const previousRowsRef = useRef<LeaderboardRow[]>([]);
 
   const PAGE_SIZE = 15;
 
   const loadTeams = useCallback(async () => {
     try {
-      const response = await fetch("/api/teams/memberships");
+      const response = await fetch("/api/teams/public");
       const payload = await response.json();
 
       if (!response.ok) {
         throw new Error(payload.error || "Unable to load teams");
       }
 
-      const normalizedTeams: TeamRow[] = (payload.teams ?? []).map(
-        (row: { team_id: string; teams?: { id: string; name: string } | { id: string; name: string }[] }) => {
-          const nested = row.teams;
-          const parsedTeams = Array.isArray(nested)
-            ? nested.map((team) => ({ id: String(team.id), name: String(team.name) }))
-            : nested
-              ? [{ id: String(nested.id), name: String(nested.name) }]
-              : [];
-
-          return {
-            team_id: String(row.team_id),
-            teams: parsedTeams,
-          };
-        },
+      const normalizedTeams: PublicTeam[] = (payload.teams ?? []).map(
+        (row: { id?: string; name?: string }) => ({
+          id: String(row.id ?? ""),
+          name: String(row.name ?? "Unnamed team"),
+        }),
       );
 
-      setTeams(normalizedTeams);
+      setTeams(normalizedTeams.filter((team) => Boolean(team.id)));
       setStatus(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to load teams");
@@ -159,7 +148,24 @@ export default function LeaderboardPage() {
         const returnedContributions: Record<string, ContributionRow[]> = payload.contributions ?? {};
         const contributionCount = Object.values(returnedContributions).reduce((count, list) => count + list.length, 0);
 
-        setRows(payload.leaderboard ?? []);
+        const incomingLeaderboard: LeaderboardRow[] = payload.leaderboard ?? [];
+        const previousRankings = reset
+          ? new Map<string, number>()
+          : new Map(previousRowsRef.current.map((row, index) => [row.user_id, index]));
+
+        const movement: Record<string, number> = {};
+        incomingLeaderboard.forEach((row, index) => {
+          const previousIndex = previousRankings.get(row.user_id);
+          if (previousIndex === undefined) return;
+          const delta = previousIndex - index;
+          if (delta !== 0) {
+            movement[row.user_id] = delta;
+          }
+        });
+
+        setPositionChanges(movement);
+        setRows(incomingLeaderboard);
+        previousRowsRef.current = incomingLeaderboard;
         setContributions((prev) => appendContributions(prev, returnedContributions, reset));
         setActivityHasMore(Boolean(payload.hasMore));
         const nextOffset = offset + contributionCount;
@@ -191,7 +197,7 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     if (activeTeam && teams.length > 0) {
-      const knownIds = teams.flatMap((entry) => entry.teams.map((team) => team.id ?? entry.team_id));
+      const knownIds = teams.map((team) => team.id);
       if (!knownIds.includes(activeTeam)) {
         setActiveTeam(null);
       }
@@ -204,7 +210,7 @@ export default function LeaderboardPage() {
       return;
     }
 
-    const firstTeamId = teams[0].teams[0]?.id ?? teams[0].team_id;
+    const firstTeamId = teams[0]?.id;
     if (firstTeamId) {
       setActiveTeam(firstTeamId);
       window.localStorage.setItem("activeTeamId", firstTeamId);
@@ -266,13 +272,13 @@ export default function LeaderboardPage() {
                 <p className="text-xs text-slate-500">Switch tabs to browse each leaderboard.</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                {teams.map((row) => {
-                  const id = row.teams[0]?.id ?? row.team_id;
-                  const name = row.teams[0]?.name ?? "Unnamed team";
+                {teams.map((team) => {
+                  const id = team.id;
+                  const name = team.name || "Unnamed team";
                   const isActive = activeTeam === id;
                   return (
                     <button
-                      key={row.team_id}
+                      key={id}
                       onClick={() => handleTeamChange(id)}
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                         isActive
@@ -420,6 +426,7 @@ export default function LeaderboardPage() {
                     const isExpanded = expandedUser === row.user_id;
                     const memberContributions = contributions[row.user_id] ?? [];
                     const rankStyle = tierStyles[idx] ?? "from-white via-amber-50 to-orange-50 text-slate-900";
+                    const change = positionChanges[row.user_id];
 
                     return (
                       <Fragment key={row.user_id}>
@@ -441,7 +448,35 @@ export default function LeaderboardPage() {
                                   <p className="text-xs text-slate-500">{row.completed_count} completions</p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-lg font-bold text-amber-700">{row.points} pts</p>
+                                  <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">
+                                    {row.points} pts
+                                    {change && (
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                                          change > 0
+                                            ? "border-green-100 bg-green-50 text-green-700"
+                                            : "border-rose-100 bg-rose-50 text-rose-700"
+                                        }`}
+                                      >
+                                        {Math.abs(change) === 1 ? (
+                                          change > 0 ? (
+                                            <ChevronUp className="h-4 w-4" aria-hidden />
+                                          ) : (
+                                            <ChevronDown className="h-4 w-4" aria-hidden />
+                                          )
+                                        ) : change > 0 ? (
+                                          <ChevronsUp className="h-4 w-4" aria-hidden />
+                                        ) : (
+                                          <ChevronsDown className="h-4 w-4" aria-hidden />
+                                        )}
+                                        <span className="sr-only">
+                                          {change > 0
+                                            ? `Moved up ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`
+                                            : `Moved down ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`}
+                                        </span>
+                                      </span>
+                                    )}
+                                  </p>
                                   <button
                                     onClick={() => setExpandedUser(isExpanded ? null : row.user_id)}
                                     className="text-xs font-semibold text-orange-600 underline underline-offset-4 transition hover:text-orange-700"

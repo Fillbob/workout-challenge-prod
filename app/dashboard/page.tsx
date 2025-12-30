@@ -15,6 +15,7 @@ interface Challenge {
   end_date: string | null;
   base_points: number;
   team_ids: string[] | null;
+  hidden?: boolean;
 }
 
 interface Submission {
@@ -430,6 +431,7 @@ export default function DashboardPage() {
         ...challenge,
         challenge_index: Number.isFinite(parsedIndex) ? parsedIndex : 1,
         team_ids: challenge.team_ids ?? [],
+        hidden: Boolean(challenge.hidden),
       };
     });
     setChallenges(normalized as Challenge[]);
@@ -786,6 +788,7 @@ export default function DashboardPage() {
 
   const visibleChallenges = useMemo(() => {
     return challenges.filter((challenge) => {
+      if (challenge.hidden) return false;
       const allowedTeams = challenge.team_ids ?? [];
       if (allowedTeams.length === 0) return true;
       if (activeTeamId) return allowedTeams.includes(activeTeamId);
