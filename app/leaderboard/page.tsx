@@ -2,7 +2,7 @@
 
 import { useRequireUser } from "@/lib/auth";
 import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface PublicTeam {
   id: string;
