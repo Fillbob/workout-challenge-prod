@@ -258,8 +258,10 @@ export default function LeaderboardPage() {
     [stackDepthByPoints],
   );
 
-  const stackGap = 64;
-  const trackHeight = 32 + maxStackDepth * stackGap;
+  const stackGap = 36;
+  const iconBaseOffset = 48;
+  const lineTop = iconBaseOffset + (maxStackDepth - 1) * stackGap;
+  const trackHeight = 200 + (maxStackDepth - 1) * stackGap * 3;
 
   const milestoneValues = useMemo(() => {
     const fractions = [0, 0.25, 0.5, 0.75, 1];
@@ -378,7 +380,10 @@ export default function LeaderboardPage() {
                           className="relative mt-4 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white px-6 py-6 shadow-inner shadow-orange-50"
                           style={{ height: `${trackHeight}px` }}
                         >
-                          <div className="absolute left-6 right-6 top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-100" />
+                          <div
+                            className="absolute left-6 right-6 h-3 rounded-full bg-slate-100"
+                            style={{ top: `${lineTop}px` }}
+                          />
                           <div className="relative h-full">
                             {(() => {
                               const stackOffsets: Record<number, number> = {};
@@ -388,35 +393,48 @@ export default function LeaderboardPage() {
                                 const isFocused = focusedUser === row.user_id;
                                 const occurrence = stackOffsets[row.points] ?? 0;
                                 stackOffsets[row.points] = occurrence + 1;
-                                const topOffset = 12 + occurrence * stackGap;
+                                const stackShift = occurrence * stackGap;
 
                                 return (
                                   <button
                                     key={row.user_id}
                                     type="button"
                                     onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
-                                    style={{ left: `${fill}%`, top: `${topOffset}px` }}
-                                    className={`group absolute flex -translate-x-1/2 flex-col items-center gap-2 transition focus:outline-none ${
+                                    style={{ left: `${fill}%`, top: `${lineTop - 12}px` }}
+                                    className={`group absolute -translate-x-1/2 transition focus:outline-none ${
                                       isFocused ? "scale-105" : "hover:-translate-y-0.5"
                                     }`}
                                   >
-                                    <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
-                                    <span
-                                      className={`h-12 w-px border-l-2 border-dashed ${
-                                        isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
-                                      }`}
-                                    />
-                                    <span
-                                      className={`rounded-full bg-gradient-to-r px-3 py-1 text-[11px] font-semibold text-white shadow ${gradient}`}
-                                    >
-                                      {row.points} pts
-                                    </span>
-                                    <span className="text-[11px] font-medium text-slate-700">{row.name}</span>
-                                    {isFocused && (
-                                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
-                                        Spotlighted
-                                      </span>
-                                    )}
+                                    <div className="relative flex w-max flex-col items-center">
+                                      <div
+                                        className="absolute left-1/2 -translate-x-1/2"
+                                        style={{ transform: `translate(-50%, -${stackShift}px)` }}
+                                      >
+                                        <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
+                                      </div>
+                                      <div
+                                        className="flex flex-col items-center gap-2"
+                                        style={{ paddingTop: `${iconBaseOffset + stackShift}px` }}
+                                      >
+                                        <span
+                                          className={`w-px border-l-2 border-dashed ${
+                                            isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
+                                          }`}
+                                          style={{ height: `${28 + stackShift}px` }}
+                                        />
+                                        <span
+                                          className={`rounded-full bg-gradient-to-r px-3 py-1 text-[11px] font-semibold text-white shadow ${gradient}`}
+                                        >
+                                          {row.points} pts
+                                        </span>
+                                        <span className="text-[11px] font-medium text-slate-700">{row.name}</span>
+                                        {isFocused && (
+                                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                                            Spotlighted
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   </button>
                                 );
                               });
