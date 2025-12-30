@@ -1,6 +1,7 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
+import { getProfileIcon, profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -299,6 +300,7 @@ export default function DashboardPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [userIdentifier, setUserIdentifier] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [profileIcon, setProfileIcon] = useState<string>("flame");
   const [profileRole, setProfileRole] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamRow[]>([]);
@@ -329,6 +331,8 @@ export default function DashboardPage() {
 
   const RECENT_PAGE_SIZE = 8;
 
+  const selectedProfileIcon = useMemo(() => getProfileIcon(profileIcon), [profileIcon]);
+
   useEffect(() => {
     setCurrentTime(new Date());
   }, []);
@@ -351,11 +355,11 @@ export default function DashboardPage() {
       setUserIdentifier(emailIdentifier);
       const fallbackName = emailIdentifier || "New athlete";
 
-      const { data: existing, error } = await supabase
-        .from("profiles")
-        .select("display_name, role")
-        .eq("id", id)
-        .maybeSingle();
+    const { data: existing, error } = await supabase
+      .from("profiles")
+      .select("display_name, role, profile_icon")
+      .eq("id", id)
+      .maybeSingle();
 
       if (error) {
         setProfileStatus(error.message);
@@ -365,7 +369,7 @@ export default function DashboardPage() {
       if (!existing) {
         const { error: insertError } = await supabase
           .from("profiles")
-          .insert({ id, display_name: fallbackName, role: "user" });
+          .insert({ id, display_name: fallbackName, role: "user", profile_icon: "flame" });
 
         if (insertError) {
           setProfileStatus(insertError.message);
@@ -374,11 +378,13 @@ export default function DashboardPage() {
 
         setProfileName(fallbackName);
         setProfileRole("user");
+        setProfileIcon("flame");
         return;
       }
 
       setProfileName(existing.display_name || fallbackName);
       setProfileRole(existing.role || "user");
+      setProfileIcon(existing.profile_icon || "flame");
     },
     [supabase],
   );
@@ -620,12 +626,12 @@ export default function DashboardPage() {
     }
     const { error } = await supabase
       .from("profiles")
-      .update({ display_name: trimmedName })
+      .update({ display_name: trimmedName, profile_icon: profileIcon })
       .eq("id", userId);
     if (error) {
       setProfileStatus(error.message);
     } else {
-      setProfileStatus("Name updated");
+      setProfileStatus("Profile updated");
     }
   };
 
@@ -1415,6 +1421,42 @@ export default function DashboardPage() {
                   onChange={(e) => setProfileName(e.target.value)}
                   className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
                 />
+                <div className="space-y-2 pt-2">
+                  <p className="text-sm font-medium text-slate-700">Choose an icon</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {profileIconOptions.map((option) => {
+                      const isActive = option.id === profileIcon;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setProfileIcon(option.id)}
+                          className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
+                            isActive
+                              ? "border-transparent bg-gradient-to-br from-orange-500 via-amber-400 to-rose-400 text-white shadow-lg shadow-orange-200"
+                              : "border-orange-100 bg-white text-slate-800 hover:border-orange-200 hover:bg-orange-50"
+                          }`}
+                          aria-label={`Select the ${option.label} icon`}
+                        >
+                          <span
+                            className={`flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br ${option.gradient} text-xl shadow-inner shadow-orange-100`}
+                          >
+                            <span className={option.accent}>{option.glyph}</span>
+                          </span>
+                          <div className="flex-1">
+                            <p className={`text-sm font-semibold ${isActive ? "text-white" : "text-slate-900"}`}>
+                              {option.label}
+                            </p>
+                            <p className={`text-[11px] leading-tight ${isActive ? "text-amber-50/90" : "text-slate-500"}`}>
+                              {option.description}
+                            </p>
+                          </div>
+                          {isActive && <span className="text-xs font-semibold text-white">Selected</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
               <button
                 onClick={handleProfileSave}

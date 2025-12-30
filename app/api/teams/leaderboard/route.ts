@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
   const { data: profileRows, error: profileError } = await admin
     .from("profiles")
-    .select("id, display_name")
+    .select("id, display_name, profile_icon")
     .in("id", memberIds);
 
   if (profileError) {
@@ -74,8 +74,12 @@ export async function GET(request: Request) {
   }
 
   const nameMap = new Map<string, string>();
+  const iconMap = new Map<string, string>();
   (profileRows ?? []).forEach((profile) => {
     nameMap.set(profile.id, profile.display_name ?? "Member");
+    if (profile.profile_icon) {
+      iconMap.set(profile.id, profile.profile_icon);
+    }
   });
 
   const { data: challengeRows, error: challengeError } = await admin
@@ -102,6 +106,7 @@ export async function GET(request: Request) {
       name: nameMap.get(id) ?? "Member",
       points: 0,
       completed_count: 0,
+      icon: iconMap.get(id) ?? null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -137,6 +142,7 @@ export async function GET(request: Request) {
       name: nameMap.get(id) ?? "Member",
       points: leaderboardTotals.get(id)?.points ?? 0,
       completed_count: leaderboardTotals.get(id)?.completed ?? 0,
+      icon: iconMap.get(id) ?? null,
     }))
     .sort((a, b) => b.points - a.points || b.completed_count - a.completed_count || a.name.localeCompare(b.name));
 
