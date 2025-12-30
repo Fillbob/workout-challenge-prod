@@ -1,7 +1,7 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
-import { getProfileIcon, profileIconOptions } from "@/lib/profileIcons";
+import { profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -330,8 +330,6 @@ export default function DashboardPage() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const RECENT_PAGE_SIZE = 8;
-
-  const selectedProfileIcon = useMemo(() => getProfileIcon(profileIcon), [profileIcon]);
 
   useEffect(() => {
     setCurrentTime(new Date());

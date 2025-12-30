@@ -1,8 +1,9 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
+import { getProfileIcon } from "@/lib/profileIcons";
 import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface PublicTeam {
   id: string;
@@ -72,6 +73,7 @@ export default function LeaderboardPage() {
   const [activityLoading, setActivityLoading] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [positionChanges, setPositionChanges] = useState<Record<string, number>>({});
+  const [focusedUser, setFocusedUser] = useState<string | null>(null);
 
   const activityOffsetRef = useRef(0);
   const previousRowsRef = useRef<LeaderboardRow[]>([]);
@@ -127,6 +129,7 @@ export default function LeaderboardPage() {
         setActivityOffset(0);
         setContributions({});
         setExpandedUser(null);
+        setFocusedUser(null);
       }
 
       const offset = reset ? 0 : activityOffsetRef.current;
