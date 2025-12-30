@@ -14,6 +14,7 @@ interface Challenge {
   end_date: string | null;
   base_points: number;
   team_ids: string[] | null;
+  hidden?: boolean;
 }
 
 interface AdminTeam {
@@ -41,6 +42,7 @@ const emptyForm: Omit<Challenge, "id"> = {
   end_date: null,
   base_points: 10,
   team_ids: [],
+  hidden: false,
 };
 
 export default function AdminPage() {
@@ -76,6 +78,7 @@ export default function AdminPage() {
         ? Number(challenge.challenge_index)
         : 1,
       team_ids: challenge.team_ids ?? [],
+      hidden: Boolean(challenge.hidden),
     }));
     setChallenges(normalized as Challenge[]);
   }, [setChallenges, setStatus, supabase]);
@@ -103,13 +106,13 @@ export default function AdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to load teams");
+        throw new Error(result.error || "Unable to load groups");
       }
 
       setTeams(result.teams ?? []);
       setTeamStatus(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load teams";
+      const message = error instanceof Error ? error.message : "Unable to load groups";
       setTeamStatus(message);
     }
   }, []);
@@ -247,14 +250,14 @@ export default function AdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to create team");
+        throw new Error(result.error || "Unable to create group");
       }
 
       setTeamStatus("Team created");
       setTeamName("");
       loadTeams();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to create team";
+      const message = error instanceof Error ? error.message : "Unable to create group";
       setTeamStatus(message);
     }
   };
@@ -272,13 +275,13 @@ export default function AdminPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Unable to delete team");
+        throw new Error(result.error || "Unable to delete group");
       }
 
       setTeamStatus("Team deleted");
       loadTeams();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to delete team";
+      const message = error instanceof Error ? error.message : "Unable to delete group";
       setTeamStatus(message);
     }
   };
@@ -318,6 +321,7 @@ export default function AdminPage() {
       end_date: challenge.end_date,
       base_points: challenge.base_points,
       team_ids: challenge.team_ids ?? [],
+      hidden: Boolean(challenge.hidden),
     });
   };
 
@@ -354,7 +358,7 @@ export default function AdminPage() {
 
         {role === "mod" && (
           <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-sm text-indigo-100">
-            You have moderator access. You can publish announcements, but only admins can edit teams and challenges.
+            You have moderator access. You can publish announcements, but only admins can edit groups and challenges.
           </div>
         )}
 
@@ -427,8 +431,8 @@ export default function AdminPage() {
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-indigo-400">Teams</p>
-                  <h2 className="text-2xl font-semibold">Create and manage teams</h2>
+                  <p className="text-sm text-indigo-400">Groups</p>
+                  <h2 className="text-2xl font-semibold">Create and manage groups</h2>
                 </div>
                 {teamStatus && <p className="text-sm text-rose-400">{teamStatus}</p>}
               </div>
@@ -436,11 +440,11 @@ export default function AdminPage() {
                 <input
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="Team name"
+                  placeholder="Group name"
                   className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                 />
                 <button onClick={handleCreateTeam} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg">
-                  Create team
+                  Create group
                 </button>
               </div>
               <p className="text-sm text-slate-400">Join codes are shown below and can be shared with users.</p>
@@ -489,7 +493,7 @@ export default function AdminPage() {
                     {teams.length === 0 && (
                       <tr>
                         <td className="p-3" colSpan={4}>
-                          <p className="text-slate-500">No teams created yet.</p>
+                          <p className="text-slate-500">No groups created yet.</p>
                         </td>
                       </tr>
                     )}
@@ -562,11 +566,20 @@ export default function AdminPage() {
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                   />
                 </label>
+                <label className="flex items-center gap-3 text-sm md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.hidden)}
+                    onChange={(e) => setForm({ ...form, hidden: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-indigo-500"
+                  />
+                  <span className="text-slate-200">Hide this challenge from participants</span>
+                </label>
               </div>
               <div className="space-y-2">
-                <p className="text-sm text-slate-300">Limit to teams (optional)</p>
+                <p className="text-sm text-slate-300">Limit to groups (optional)</p>
                 <p className="text-xs text-slate-500">
-                  Leave empty to make the challenge available to every team. Select one or more teams to restrict it.
+                  Leave empty to make the challenge available to every group. Select one or more groups to restrict it.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {teams.map((team) => {
@@ -588,7 +601,7 @@ export default function AdminPage() {
                       </label>
                     );
                   })}
-                  {teams.length === 0 && <p className="text-sm text-slate-500">Create a team to restrict challenges.</p>}
+                  {teams.length === 0 && <p className="text-sm text-slate-500">Create a group to restrict challenges.</p>}
                 </div>
               </div>
               {status && <p className="text-sm text-rose-400">{status}</p>}
@@ -607,27 +620,29 @@ export default function AdminPage() {
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-slate-800 text-slate-300">
-                  <tr>
-                    <th className="p-3 text-left">Week</th>
-                    <th className="p-3 text-left">Challenge #</th>
-                    <th className="p-3 text-left">Title</th>
-                    <th className="p-3 text-left">Teams</th>
-                    <th className="p-3 text-left">Points</th>
-                    <th className="p-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {challenges.map((challenge) => (
-                    <tr key={challenge.id} className="border-t border-slate-800">
-                      <td className="p-3">{challenge.week_index}</td>
-                      <td className="p-3">{challenge.challenge_index}</td>
-                      <td className="p-3">{challenge.title}</td>
-                      <td className="p-3 text-slate-300">
-                        {challenge.team_ids?.length
-                          ? challenge.team_ids
-                              .map((id) => teams.find((team) => team.id === id)?.name ?? id)
-                              .join(", ")
-                          : "All teams"}
+                    <tr>
+                      <th className="p-3 text-left">Week</th>
+                      <th className="p-3 text-left">Challenge #</th>
+                      <th className="p-3 text-left">Title</th>
+                      <th className="p-3 text-left">Visibility</th>
+                      <th className="p-3 text-left">Teams</th>
+                      <th className="p-3 text-left">Points</th>
+                      <th className="p-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {challenges.map((challenge) => (
+                      <tr key={challenge.id} className="border-t border-slate-800">
+                        <td className="p-3">{challenge.week_index}</td>
+                        <td className="p-3">{challenge.challenge_index}</td>
+                        <td className="p-3">{challenge.title}</td>
+                        <td className="p-3 text-slate-300">{challenge.hidden ? "Hidden" : "Visible"}</td>
+                        <td className="p-3 text-slate-300">
+                          {challenge.team_ids?.length
+                            ? challenge.team_ids
+                                .map((id) => teams.find((team) => team.id === id)?.name ?? id)
+                                .join(", ")
+                            : "All groups"}
                       </td>
                       <td className="p-3">{challenge.base_points}</td>
                       <td className="p-3 flex gap-3">
@@ -642,7 +657,7 @@ export default function AdminPage() {
                   ))}
                   {challenges.length === 0 && (
                     <tr>
-                      <td className="p-3" colSpan={6}>
+                      <td className="p-3" colSpan={7}>
                         <p className="text-slate-500">No challenges created yet.</p>
                       </td>
                     </tr>
