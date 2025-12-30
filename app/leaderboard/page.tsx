@@ -1,6 +1,7 @@
 "use client";
 
 import { useRequireUser } from "@/lib/auth";
+import { getProfileIcon } from "@/lib/profileIcons";
 import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
