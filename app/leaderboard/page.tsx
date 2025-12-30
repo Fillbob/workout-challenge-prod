@@ -74,6 +74,7 @@ export default function LeaderboardPage() {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [positionChanges, setPositionChanges] = useState<Record<string, number>>({});
   const [focusedUser, setFocusedUser] = useState<string | null>(null);
+  const [maxAvailablePoints, setMaxAvailablePoints] = useState(0);
 
   const activityOffsetRef = useRef(0);
   const previousRowsRef = useRef<LeaderboardRow[]>([]);
@@ -149,6 +150,7 @@ export default function LeaderboardPage() {
         }
 
         const returnedContributions: Record<string, ContributionRow[]> = payload.contributions ?? {};
+        const availablePoints = Number(payload.maxAvailablePoints ?? 0);
         const contributionCount = Object.values(returnedContributions).reduce((count, list) => count + list.length, 0);
 
         const incomingLeaderboard: LeaderboardRow[] = payload.leaderboard ?? [];
@@ -168,6 +170,7 @@ export default function LeaderboardPage() {
 
         setPositionChanges(movement);
         setRows(incomingLeaderboard);
+        setMaxAvailablePoints(availablePoints);
         previousRowsRef.current = incomingLeaderboard;
         setContributions((prev) => appendContributions(prev, returnedContributions, reset));
         setActivityHasMore(Boolean(payload.hasMore));
@@ -238,7 +241,10 @@ export default function LeaderboardPage() {
   };
 
   const maxPoints = useMemo(() => (rows.length > 0 ? Math.max(...rows.map((row) => row.points)) : 0), [rows]);
-  const axisLimit = useMemo(() => Math.max(50, Math.ceil(Math.max(maxPoints, 1) / 50) * 50), [maxPoints]);
+  const axisLimit = useMemo(() => {
+    const baseLimit = Math.max(maxAvailablePoints, maxPoints, 1);
+    return Math.max(50, Math.ceil(baseLimit / 50) * 50);
+  }, [maxAvailablePoints, maxPoints]);
   const axisTicks = useMemo(
     () => Array.from({ length: Math.floor(axisLimit / 50) + 1 }, (_, idx) => idx * 50),
     [axisLimit],
@@ -340,74 +346,104 @@ export default function LeaderboardPage() {
                     <p className="text-xs text-slate-500">Click an icon to spotlight their lane.</p>
                   </div>
 
-                  <div className="mt-4 space-y-3">
-                    {rows.map((row, idx) => {
-                      const gradient = laneGradients[idx % laneGradients.length];
-                      const fill = Math.min(100, (row.points / axisLimit) * 100);
-                      const isFocused = focusedUser === row.user_id;
-                      return (
-                        <div
-                          key={row.user_id}
-                          className={`rounded-2xl border border-orange-100/70 bg-white/80 p-3 transition ${
-                            isFocused ? "ring-2 ring-orange-300 shadow-lg shadow-orange-100" : "shadow-sm shadow-orange-50"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
-                              className="transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                            >
-                              <ProfileCircle iconId={row.icon} name={row.name} size="md" />
-                            </button>
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-semibold text-slate-900">{row.name}</p>
-                                  {isFocused && (
-                                    <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
-                                      Spotlighted
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm font-semibold text-orange-700">{row.points} pts</p>
-                              </div>
-                              <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100">
-                                <div
-                                  className={`h-full rounded-full bg-gradient-to-r ${gradient}`}
-                                  style={{ width: `${fill}%` }}
-                                />
-                              </div>
-                              <div className="flex items-center justify-between text-[11px] text-slate-500">
-                                <span>{row.completed_count} completions</span>
-                                <span>{Math.round(fill)}% of {axisLimit} pt lane</span>
-                              </div>
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-2xl border border-orange-100/80 bg-white/80 p-4 shadow-sm shadow-orange-50">
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                        <span>Start</span>
+                        <span>{axisLimit} pts track</span>
+                      </div>
+                      <div className="relative mt-4 h-32 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white px-6">
+                        <div className="absolute left-6 right-6 top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-100" />
+                        <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 flex justify-between text-[11px] text-slate-500">
+                          {axisTicks.map((tick) => (
+                            <div key={tick} className="flex flex-col items-center gap-1">
+                              <span className="h-4 w-px bg-orange-200" />
+                              <span>{tick}</span>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      );
-                    })}
-                    {rows.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
-                        No racers yet. Complete a challenge to join the track.
+                        <div className="relative h-full">
+                          {rows.map((row, idx) => {
+                            const gradient = laneGradients[idx % laneGradients.length];
+                            const fill = Math.min(100, (row.points / axisLimit) * 100);
+                            const isFocused = focusedUser === row.user_id;
+                            return (
+                              <button
+                                key={row.user_id}
+                                type="button"
+                                onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
+                                style={{ left: `${fill}%` }}
+                                className={`group absolute top-3 flex -translate-x-1/2 flex-col items-center gap-2 transition focus:outline-none ${
+                                  isFocused ? "scale-105" : "hover:-translate-y-0.5"
+                                }`}
+                              >
+                                <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
+                                <span
+                                  className={`h-14 w-px border-l-2 border-dashed ${
+                                    isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
+                                  }`}
+                                />
+                                <span
+                                  className={`rounded-full bg-gradient-to-r px-3 py-1 text-[11px] font-semibold text-white shadow ${gradient}`}
+                                >
+                                  {row.points} pts
+                                </span>
+                                <span className="text-[11px] font-medium text-slate-700">{row.name}</span>
+                                {isFocused && (
+                                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                                    Spotlighted
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                          {rows.length === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+                              No racers yet. Complete a challenge to join the track.
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                      <span>Start</span>
-                      <span>{axisLimit} pts</span>
+                      <p className="mt-3 text-xs text-slate-600">
+                        Track scaled to {maxAvailablePoints} pts available across active challenges.
+                      </p>
                     </div>
-                    <div className="relative h-10 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white">
-                      <div className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 justify-between">
-                        {axisTicks.map((tick) => (
-                          <div key={tick} className="flex flex-col items-center gap-1 text-[11px] text-slate-500">
-                            <span className="h-4 w-px bg-orange-200" />
-                            <span>{tick}</span>
-                          </div>
-                        ))}
-                      </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {rows.map((row, idx) => {
+                        const isFocused = focusedUser === row.user_id;
+                        const gradient = laneGradients[idx % laneGradients.length];
+                        return (
+                          <button
+                            key={row.user_id}
+                            type="button"
+                            onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
+                            className={`flex items-center gap-3 rounded-2xl border border-orange-100/70 bg-white/80 p-3 text-left transition focus:outline-none ${
+                              isFocused
+                                ? "ring-2 ring-orange-300 shadow-lg shadow-orange-100"
+                                : "hover:-translate-y-0.5 shadow-sm shadow-orange-50"
+                            }`}
+                          >
+                            <div className={`rounded-full bg-gradient-to-r ${gradient} p-[2px] shadow-inner shadow-orange-100`}>
+                              <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
+                            </div>
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                                <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                  {row.points} pts
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600">{row.completed_count} completed challenges</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {rows.length === 0 && (
+                        <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
+                          No racers yet. Complete a challenge to join the track.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

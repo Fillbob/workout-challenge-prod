@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   const memberIds = (memberRows ?? []).map((row) => row.user_id);
 
   if (memberIds.length === 0) {
-    return NextResponse.json({ leaderboard: [], contributions: {}, hasMore: false, total: 0 });
+    return NextResponse.json({ leaderboard: [], contributions: {}, hasMore: false, total: 0, maxAvailablePoints: 0 });
   }
 
   const { data: profileRows, error: profileError } = await admin
@@ -84,21 +84,26 @@ export async function GET(request: Request) {
 
   const { data: challengeRows, error: challengeError } = await admin
     .from("challenges")
-    .select("id, team_ids, hidden");
+    .select("id, team_ids, hidden, base_points");
 
   if (challengeError) {
     return NextResponse.json({ error: challengeError.message }, { status: 400 });
   }
 
-  const allowedChallengeIds = (challengeRows ?? [])
-    .filter(
-      (challenge) =>
-        !challenge.hidden &&
-        (!challenge.team_ids ||
-          challenge.team_ids.length === 0 ||
-          (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId))),
-    )
-    .map((challenge) => challenge.id);
+  const allowedChallenges = (challengeRows ?? []).filter(
+    (challenge) =>
+      !challenge.hidden &&
+      (!challenge.team_ids ||
+        challenge.team_ids.length === 0 ||
+        (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId))),
+  );
+
+  const maxAvailablePoints = allowedChallenges.reduce(
+    (total, challenge) => total + (challenge.base_points ?? 0),
+    0,
+  );
+
+  const allowedChallengeIds = allowedChallenges.map((challenge) => challenge.id);
 
   const baseLeaderboard = memberIds
     .map((id) => ({
@@ -111,7 +116,13 @@ export async function GET(request: Request) {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   if (allowedChallengeIds.length === 0) {
-    return NextResponse.json({ leaderboard: baseLeaderboard, contributions: {}, hasMore: false, total: 0 });
+    return NextResponse.json({
+      leaderboard: baseLeaderboard,
+      contributions: {},
+      hasMore: false,
+      total: 0,
+      maxAvailablePoints,
+    });
   }
 
   const { data: statsRows, error: statsError } = await admin
@@ -181,5 +192,5 @@ export async function GET(request: Request) {
     });
   });
 
-  return NextResponse.json({ leaderboard, contributions, hasMore, total });
+  return NextResponse.json({ leaderboard, contributions, hasMore, total, maxAvailablePoints });
 }
