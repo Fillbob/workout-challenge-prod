@@ -245,10 +245,29 @@ export default function LeaderboardPage() {
     const baseLimit = Math.max(maxAvailablePoints, maxPoints, 1);
     return Math.max(50, Math.ceil(baseLimit / 50) * 50);
   }, [maxAvailablePoints, maxPoints]);
-  const axisTicks = useMemo(
-    () => Array.from({ length: Math.floor(axisLimit / 50) + 1 }, (_, idx) => idx * 50),
-    [axisLimit],
+  const stackDepthByPoints = useMemo(() => {
+    const counts: Record<number, number> = {};
+    rows.forEach((row) => {
+      counts[row.points] = (counts[row.points] ?? 0) + 1;
+    });
+    return counts;
+  }, [rows]);
+
+  const maxStackDepth = useMemo(
+    () => (Object.values(stackDepthByPoints).length ? Math.max(...Object.values(stackDepthByPoints)) : 1),
+    [stackDepthByPoints],
   );
+
+  const stackGap = 64;
+  const trackHeight = 32 + maxStackDepth * stackGap;
+
+  const milestoneValues = useMemo(() => {
+    const fractions = [0, 0.25, 0.5, 0.75, 1];
+    const scaled = fractions
+      .map((fraction) => Math.round(axisLimit * fraction))
+      .filter((value, index, arr) => arr.indexOf(value) === index);
+    return scaled;
+  }, [axisLimit]);
 
   const topPerformer = rows[0];
 
@@ -335,81 +354,91 @@ export default function LeaderboardPage() {
                 </div>
               </div>
 
-              <div className="lg:col-span-3 space-y-4">
-                <div className="rounded-3xl border border-orange-100 bg-white/80 p-5 shadow-lg shadow-orange-100/70 backdrop-blur">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-orange-600">Race view</p>
-                      <h3 className="text-xl font-semibold text-slate-900">Horse race tracker</h3>
-                      <p className="text-sm text-slate-600">Follow every athlete’s pace with icons on the track.</p>
-                    </div>
-                    <p className="text-xs text-slate-500">Click an icon to spotlight their lane.</p>
-                  </div>
-
-                  <div className="mt-4 space-y-4">
-                    <div className="rounded-2xl border border-orange-100/80 bg-white/80 p-4 shadow-sm shadow-orange-50">
-                      <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                        <span>Start</span>
-                        <span>{axisLimit} pts track</span>
+                <div className="lg:col-span-3 space-y-4">
+                  <div className="rounded-3xl border border-orange-100 bg-white/80 p-5 shadow-lg shadow-orange-100/70 backdrop-blur">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-orange-600">Race view</p>
+                        <h3 className="text-xl font-semibold text-slate-900">Race view</h3>
+                        <p className="text-sm text-slate-600">One shared track that scales with available challenges.</p>
                       </div>
-                      <div className="relative mt-4 h-32 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white px-6">
-                        <div className="absolute left-6 right-6 top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-100" />
-                        <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 flex justify-between text-[11px] text-slate-500">
-                          {axisTicks.map((tick) => (
-                            <div key={tick} className="flex flex-col items-center gap-1">
-                              <span className="h-4 w-px bg-orange-200" />
-                              <span>{tick}</span>
+                      <p className="text-xs text-slate-500">Click an icon to spotlight their lane.</p>
+                    </div>
+
+                    <div className="mt-4 space-y-4">
+                      <div className="rounded-2xl border border-orange-100/80 bg-white/80 p-4 shadow-sm shadow-orange-50">
+                        <div className="flex flex-col gap-2 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-2 text-[11px] font-semibold text-orange-700">
+                            <span className="rounded-full bg-orange-50 px-2 py-0.5">Shared track</span>
+                            <span className="text-slate-600">Scaled to active challenges</span>
+                          </div>
+                          <span className="text-[11px] font-semibold text-slate-700">{maxAvailablePoints} pts available</span>
+                        </div>
+                        <div
+                          className="relative mt-4 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white px-6 py-6 shadow-inner shadow-orange-50"
+                          style={{ height: `${trackHeight}px` }}
+                        >
+                          <div className="absolute left-6 right-6 top-1/2 h-3 -translate-y-1/2 rounded-full bg-slate-100" />
+                          <div className="relative h-full">
+                            {(() => {
+                              const stackOffsets: Record<number, number> = {};
+                              return rows.map((row, idx) => {
+                                const gradient = laneGradients[idx % laneGradients.length];
+                                const fill = Math.min(100, (row.points / axisLimit) * 100);
+                                const isFocused = focusedUser === row.user_id;
+                                const occurrence = stackOffsets[row.points] ?? 0;
+                                stackOffsets[row.points] = occurrence + 1;
+                                const topOffset = 12 + occurrence * stackGap;
+
+                                return (
+                                  <button
+                                    key={row.user_id}
+                                    type="button"
+                                    onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
+                                    style={{ left: `${fill}%`, top: `${topOffset}px` }}
+                                    className={`group absolute flex -translate-x-1/2 flex-col items-center gap-2 transition focus:outline-none ${
+                                      isFocused ? "scale-105" : "hover:-translate-y-0.5"
+                                    }`}
+                                  >
+                                    <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
+                                    <span
+                                      className={`h-12 w-px border-l-2 border-dashed ${
+                                        isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
+                                      }`}
+                                    />
+                                    <span
+                                      className={`rounded-full bg-gradient-to-r px-3 py-1 text-[11px] font-semibold text-white shadow ${gradient}`}
+                                    >
+                                      {row.points} pts
+                                    </span>
+                                    <span className="text-[11px] font-medium text-slate-700">{row.name}</span>
+                                    {isFocused && (
+                                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                                        Spotlighted
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              });
+                            })()}
+                            {rows.length === 0 && (
+                              <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+                                No racers yet. Complete a challenge to join the track.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-[11px] font-semibold text-slate-600">
+                          {milestoneValues.map((value) => (
+                            <div key={value} className="flex flex-col items-center gap-1">
+                              <span className="h-3 w-px rounded-full bg-orange-200" />
+                              <span>{value} pts</span>
                             </div>
                           ))}
                         </div>
-                        <div className="relative h-full">
-                          {rows.map((row, idx) => {
-                            const gradient = laneGradients[idx % laneGradients.length];
-                            const fill = Math.min(100, (row.points / axisLimit) * 100);
-                            const isFocused = focusedUser === row.user_id;
-                            return (
-                              <button
-                                key={row.user_id}
-                                type="button"
-                                onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
-                                style={{ left: `${fill}%` }}
-                                className={`group absolute top-3 flex -translate-x-1/2 flex-col items-center gap-2 transition focus:outline-none ${
-                                  isFocused ? "scale-105" : "hover:-translate-y-0.5"
-                                }`}
-                              >
-                                <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
-                                <span
-                                  className={`h-14 w-px border-l-2 border-dashed ${
-                                    isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
-                                  }`}
-                                />
-                                <span
-                                  className={`rounded-full bg-gradient-to-r px-3 py-1 text-[11px] font-semibold text-white shadow ${gradient}`}
-                                >
-                                  {row.points} pts
-                                </span>
-                                <span className="text-[11px] font-medium text-slate-700">{row.name}</span>
-                                {isFocused && (
-                                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
-                                    Spotlighted
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                          {rows.length === 0 && (
-                            <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
-                              No racers yet. Complete a challenge to join the track.
-                            </div>
-                          )}
-                        </div>
                       </div>
-                      <p className="mt-3 text-xs text-slate-600">
-                        Track scaled to {maxAvailablePoints} pts available across active challenges.
-                      </p>
-                    </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-3 sm:grid-cols-2">
                       {rows.map((row, idx) => {
                         const isFocused = focusedUser === row.user_id;
                         const gradient = laneGradients[idx % laneGradients.length];
