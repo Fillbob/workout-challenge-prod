@@ -258,10 +258,12 @@ export default function LeaderboardPage() {
     [stackDepthByPoints],
   );
 
-  const stackGap = 36;
-  const iconBaseOffset = 48;
-  const lineTop = iconBaseOffset + (maxStackDepth - 1) * stackGap;
-  const trackHeight = 200 + (maxStackDepth - 1) * stackGap * 3;
+  const stackGap = 40;
+  const iconSize = 36;
+  const iconBaseOffset = 40;
+  const lineTopBase = 140;
+  const lineTop = lineTopBase + (maxStackDepth - 1) * stackGap;
+  const trackHeight = lineTopBase + 80 + (maxStackDepth - 1) * stackGap * 2;
 
   const milestoneValues = useMemo(() => {
     const fractions = [0, 0.25, 0.5, 0.75, 1];
@@ -394,46 +396,30 @@ export default function LeaderboardPage() {
                                 const occurrence = stackOffsets[row.points] ?? 0;
                                 stackOffsets[row.points] = occurrence + 1;
                                 const stackShift = occurrence * stackGap;
+                                const iconTop = lineTop - iconBaseOffset - iconSize - stackShift;
+                                const connectorHeight = lineTop - (iconTop + iconSize);
 
                                 return (
                                   <button
                                     key={row.user_id}
                                     type="button"
                                     onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
-                                    style={{ left: `${fill}%`, top: `${lineTop - 12}px` }}
+                                    style={{ left: `${fill}%`, top: `${iconTop}px` }}
                                     className={`group absolute -translate-x-1/2 transition focus:outline-none ${
                                       isFocused ? "scale-105" : "hover:-translate-y-0.5"
                                     }`}
                                   >
-                                    <div className="relative flex w-max flex-col items-center">
-                                      <div
-                                        className="absolute left-1/2 -translate-x-1/2"
-                                        style={{ transform: `translate(-50%, -${stackShift}px)` }}
-                                      >
+                                    <div className="flex flex-col items-center">
+                                      <div className={`rounded-full bg-gradient-to-r ${gradient} p-[2px] shadow-inner shadow-orange-100`}>
                                         <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
                                       </div>
-                                      <div
-                                        className="flex flex-col items-center gap-2"
-                                        style={{ paddingTop: `${iconBaseOffset + stackShift}px` }}
-                                      >
-                                        <span
-                                          className={`w-px border-l-2 border-dashed ${
-                                            isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
-                                          }`}
-                                          style={{ height: `${28 + stackShift}px` }}
-                                        />
-                                        <span
-                                          className={`rounded-full bg-gradient-to-r px-3 py-1 text-[11px] font-semibold text-white shadow ${gradient}`}
-                                        >
-                                          {row.points} pts
-                                        </span>
-                                        <span className="text-[11px] font-medium text-slate-700">{row.name}</span>
-                                        {isFocused && (
-                                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
-                                            Spotlighted
-                                          </span>
-                                        )}
-                                      </div>
+                                      <span
+                                        className={`mt-1 w-px border-l-2 border-dashed ${
+                                          isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
+                                        }`}
+                                        style={{ height: `${connectorHeight}px` }}
+                                      />
+                                      <span className="sr-only">{`${row.name} at ${row.points} points`}</span>
                                     </div>
                                   </button>
                                 );
