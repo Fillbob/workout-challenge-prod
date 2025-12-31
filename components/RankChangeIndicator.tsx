@@ -24,16 +24,18 @@ export function RankChangeIndicator({ delta }: RankChangeIndicatorProps) {
   const color = isUp ? "text-green-600" : "text-rose-600";
 
   return (
-    <span className="ml-1 inline-flex h-5 w-4 flex-col items-center justify-center" aria-label={label}>
+    <span className="ml-1 inline-flex h-6 w-6 flex-col items-center justify-center" aria-label={label}>
       <span className="sr-only">{label}</span>
       {Array.from({ length: magnitude }).map((_, idx) => (
         <svg
           key={idx}
           viewBox="0 0 24 24"
-          className={`h-2.5 w-2.5 ${color} ${idx > 0 ? "-mt-0.5" : ""}`}
+          className={`h-3 w-3 ${color} ${idx > 0 ? "-mt-0.5" : ""}`}
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           role="img"
           aria-hidden
         >
