@@ -242,9 +242,9 @@ export default function LeaderboardPage() {
 
   const maxPoints = useMemo(() => (rows.length > 0 ? Math.max(...rows.map((row) => row.points)) : 0), [rows]);
   const axisLimit = useMemo(() => {
-    const baseLimit = Math.max(maxAvailablePoints, maxPoints, 1);
+    const baseLimit = Math.max(maxPoints, 1);
     return Math.max(50, Math.ceil(baseLimit / 50) * 50);
-  }, [maxAvailablePoints, maxPoints]);
+  }, [maxPoints]);
   const stackDepthByPoints = useMemo(() => {
     const counts: Record<number, number> = {};
     rows.forEach((row) => {
