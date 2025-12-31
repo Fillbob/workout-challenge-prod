@@ -399,6 +399,8 @@ export default function LeaderboardPage() {
                                 const iconTop = lineTop - iconBaseOffset - iconSize - stackShift;
                                 const connectorHeight = lineTop - (iconTop + iconSize);
 
+                                const shouldShowConnector = occurrence === 0;
+
                                 return (
                                   <button
                                     key={row.user_id}
@@ -413,12 +415,16 @@ export default function LeaderboardPage() {
                                       <div className={`rounded-full bg-gradient-to-r ${gradient} p-[2px] shadow-inner shadow-orange-100`}>
                                         <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
                                       </div>
-                                      <span
-                                        className={`mt-1 w-px border-l-2 border-dashed ${
-                                          isFocused ? "border-orange-500" : "border-orange-200 group-hover:border-orange-400"
-                                        }`}
-                                        style={{ height: `${connectorHeight}px` }}
-                                      />
+                                      {shouldShowConnector && (
+                                        <span
+                                          className={`mt-1 w-px border-l-2 border-dashed ${
+                                            isFocused
+                                              ? "border-orange-500"
+                                              : "border-orange-200 group-hover:border-orange-400"
+                                          }`}
+                                          style={{ height: `${connectorHeight}px` }}
+                                        />
+                                      )}
                                       <span className="sr-only">{`${row.name} at ${row.points} points`}</span>
                                     </div>
                                   </button>
