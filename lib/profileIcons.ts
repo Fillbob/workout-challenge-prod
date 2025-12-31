@@ -12,7 +12,8 @@ export interface ProfileIconOption {
   id: ProfileIconId;
   label: string;
   glyph: string;
-  background: string;
+  backgroundClass: string;
+  backgroundColor: string;
   accent: string;
   description: string;
 }
@@ -22,15 +23,17 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "flame",
     label: "Ignite",
     glyph: "🔥",
-    background: "bg-orange-500",
-    accent: "text-orange-50",
+    backgroundClass: "bg-orange-500",
+    backgroundColor: "#f97316",
+    accent: "text-white",
     description: "For athletes who thrive on heat, hustle, and bold momentum.",
   },
   {
     id: "bolt",
     label: "Lightning",
     glyph: "⚡️",
-    background: "bg-yellow-400",
+    backgroundClass: "bg-yellow-400",
+    backgroundColor: "#facc15",
     accent: "text-slate-900",
     description: "Fast movers who strike goals with electric precision.",
   },
@@ -38,7 +41,8 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "mountain",
     label: "Summit",
     glyph: "⛰️",
-    background: "bg-emerald-500",
+    backgroundClass: "bg-emerald-500",
+    backgroundColor: "#10b981",
     accent: "text-white",
     description: "Steady climbers pushing through every incline.",
   },
@@ -46,7 +50,8 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "pulse",
     label: "Pulse",
     glyph: "💪",
-    background: "bg-fuchsia-500",
+    backgroundClass: "bg-fuchsia-600",
+    backgroundColor: "#d946ef",
     accent: "text-white",
     description: "Power lifters who bring the energy every set.",
   },
@@ -54,7 +59,8 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "sunrise",
     label: "Dawn",
     glyph: "🌅",
-    background: "bg-orange-200",
+    backgroundClass: "bg-orange-300",
+    backgroundColor: "#fdba74",
     accent: "text-slate-900",
     description: "Early risers stacking wins before sunrise.",
   },
@@ -62,7 +68,8 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "trophy",
     label: "Finish Line",
     glyph: "🏆",
-    background: "bg-amber-500",
+    backgroundClass: "bg-amber-500",
+    backgroundColor: "#f59e0b",
     accent: "text-slate-900",
     description: "Goal chasers who love the taste of gold.",
   },
@@ -70,7 +77,8 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "wave",
     label: "Flow",
     glyph: "🌊",
-    background: "bg-blue-500",
+    backgroundClass: "bg-blue-500",
+    backgroundColor: "#3b82f6",
     accent: "text-white",
     description: "Smooth operators keeping momentum flowing.",
   },
@@ -78,7 +86,8 @@ export const profileIconOptions: ProfileIconOption[] = [
     id: "focus",
     label: "Focus",
     glyph: "🎯",
-    background: "bg-purple-500",
+    backgroundClass: "bg-purple-600",
+    backgroundColor: "#9333ea",
     accent: "text-white",
     description: "Precision-driven teammates who never miss.",
   },
