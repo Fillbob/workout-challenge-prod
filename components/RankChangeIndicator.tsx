@@ -16,7 +16,10 @@ interface RankChangeIndicatorProps {
  * - Two stacked arrows are shown when the move is greater than 1 position (capped at 2).
  */
 export function RankChangeIndicator({ delta }: RankChangeIndicatorProps) {
-  if (!delta) return null;
+  // Keep a fixed footprint even when there is no rank movement so the layout stays aligned.
+  if (!delta) {
+    return <span aria-hidden className="ml-1 inline-flex h-6 w-6" />;
+  }
 
   const isUp = delta > 0;
   const magnitude = Math.min(2, Math.abs(delta));
