@@ -52,7 +52,7 @@ const ProfileCircle = ({ iconId, name, size = "md" }: { iconId?: string | null; 
   const icon = useMemo(() => getProfileIcon(iconId), [iconId]);
   return (
     <div
-      className={`flex items-center justify-center rounded-full bg-gradient-to-br ${icon.gradient} ${avatarSize[size]} shadow-inner shadow-orange-100`}
+      className={`flex items-center justify-center rounded-full ${icon.background} ${avatarSize[size]} shadow-inner shadow-orange-100`}
       role="img"
       aria-label={`${name}'s icon: ${icon.label}`}
     >
