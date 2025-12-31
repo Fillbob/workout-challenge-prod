@@ -1437,7 +1437,7 @@ export default function DashboardPage() {
                           aria-label={`Select the ${option.label} icon`}
                         >
                           <span
-                            className={`flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br ${option.gradient} text-xl shadow-inner shadow-orange-100`}
+                            className={`flex h-9 w-9 items-center justify-center rounded-lg ${option.background} text-xl shadow-inner shadow-orange-100`}
                           >
                             <span className={option.accent}>{option.glyph}</span>
                           </span>
