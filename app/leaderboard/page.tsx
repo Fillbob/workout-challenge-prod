@@ -2,8 +2,8 @@
 
 import { useRequireUser } from "@/lib/auth";
 import { getProfileIcon } from "@/lib/profileIcons";
-import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RankChangeIndicator } from "@/components/rank-change-indicator";
 
 interface PublicTeam {
   id: string;
@@ -154,8 +154,24 @@ export default function LeaderboardPage() {
         const contributionCount = Object.values(returnedContributions).reduce((count, list) => count + list.length, 0);
 
         const incomingLeaderboard: LeaderboardRow[] = payload.leaderboard ?? [];
+
+        // When the leaderboard loads we compare the new ordering to the previously
+        // cached ranks (either from the last render or from localStorage). This
+        // gives us a stable delta even after page refreshes.
+        const storedRankingsKey = `leaderboard:${teamId}:previousRanks`;
+        const storedRankings = (() => {
+          if (!reset) return null;
+          try {
+            const raw = window.localStorage.getItem(storedRankingsKey);
+            return raw ? (JSON.parse(raw) as Record<string, number>) : null;
+          } catch (error) {
+            console.error("Unable to read stored leaderboard ranks", error);
+            return null;
+          }
+        })();
+
         const previousRankings = reset
-          ? new Map<string, number>()
+          ? new Map<string, number>(storedRankings ? Object.entries(storedRankings) : [])
           : new Map(previousRowsRef.current.map((row, index) => [row.user_id, index]));
 
         const movement: Record<string, number> = {};
@@ -172,6 +188,16 @@ export default function LeaderboardPage() {
         setRows(incomingLeaderboard);
         setMaxAvailablePoints(availablePoints);
         previousRowsRef.current = incomingLeaderboard;
+        // Persist the latest ranking order so the next fetch can calculate
+        // deltas even after a full reload.
+        try {
+          const serialized = JSON.stringify(
+            Object.fromEntries(incomingLeaderboard.map((row, index) => [row.user_id, index])),
+          );
+          window.localStorage.setItem(storedRankingsKey, serialized);
+        } catch (error) {
+          console.error("Unable to persist leaderboard ranks", error);
+        }
         setContributions((prev) => appendContributions(prev, returnedContributions, reset));
         setActivityHasMore(Boolean(payload.hasMore));
         const nextOffset = offset + contributionCount;
@@ -510,38 +536,15 @@ export default function LeaderboardPage() {
                             <div className="flex-1">
                               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                  <p className="text-base font-semibold text-slate-900">{row.name}</p>
+                                  <p className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                                    {row.name}
+                                    <RankChangeIndicator delta={change} />
+                                  </p>
                                   <p className="text-xs text-slate-500">{row.completed_count} completions</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">
                                     {row.points} pts
-                                    {change && (
-                                      <span
-                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                                          change > 0
-                                            ? "border-green-100 bg-green-50 text-green-700"
-                                            : "border-rose-100 bg-rose-50 text-rose-700"
-                                        }`}
-                                      >
-                                        {Math.abs(change) === 1 ? (
-                                          change > 0 ? (
-                                            <ChevronUp className="h-4 w-4" aria-hidden />
-                                          ) : (
-                                            <ChevronDown className="h-4 w-4" aria-hidden />
-                                          )
-                                        ) : change > 0 ? (
-                                          <ChevronsUp className="h-4 w-4" aria-hidden />
-                                        ) : (
-                                          <ChevronsDown className="h-4 w-4" aria-hidden />
-                                        )}
-                                        <span className="sr-only">
-                                          {change > 0
-                                            ? `Moved up ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`
-                                            : `Moved down ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`}
-                                        </span>
-                                      </span>
-                                    )}
                                   </p>
                                   <button
                                     onClick={() => setExpandedUser(isExpanded ? null : row.user_id)}
