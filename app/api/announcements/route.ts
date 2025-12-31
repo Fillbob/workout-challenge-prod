@@ -20,7 +20,7 @@ export async function GET() {
 
   const { data, error } = await admin
     .from("announcements")
-    .select("id, title, body, created_at, created_by")
+    .select("id, title, body, body_md, created_at, updated_at, created_by")
     .order("created_at", { ascending: false })
     .limit(30);
 
@@ -45,6 +45,7 @@ export async function GET() {
 
   const announcements = (data ?? []).map((row) => ({
     ...row,
+    body_md: row.body_md ?? row.body ?? "",
     author_name: row.created_by ? profiles[row.created_by] ?? "Admin" : "Admin",
   }));
 
@@ -54,7 +55,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const title: string | undefined = body.title;
-  const message: string | undefined = body.body;
+  const message: string | undefined = body.body_md ?? body.body;
 
   if (!title || !message) {
     return NextResponse.json({ error: "Title and message are required" }, { status: 400 });
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, display_name")
     .eq("id", user.id)
     .single();
 
@@ -82,15 +83,61 @@ export async function POST(request: Request) {
   const admin = getServiceRoleClient();
   const { data, error } = await admin
     .from("announcements")
-    .insert({ title, body: message, created_by: user.id })
-    .select("id, title, body, created_at")
+    .insert({ title, body: message, body_md: message, created_by: user.id })
+    .select("id, title, body_md, created_at, updated_at")
     .single();
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message || "Unable to create announcement" }, { status: 500 });
   }
 
-  return NextResponse.json({ announcement: { ...data, author_name: "You" } });
+  const authorName = profile?.display_name || "You";
+  return NextResponse.json({ announcement: { ...data, author_name: authorName } });
+}
+
+export async function PUT(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  const id: string | undefined = body.id;
+  const title: string | undefined = body.title;
+  const message: string | undefined = body.body_md ?? body.body;
+
+  if (!id || !title || !message) {
+    return NextResponse.json({ error: "Id, title, and message are required" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role, display_name")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !isElevatedRole(profile?.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const admin = getServiceRoleClient();
+  const { data, error } = await admin
+    .from("announcements")
+    .update({ title, body: message, body_md: message, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id, title, body_md, created_at, updated_at, created_by")
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: error?.message || "Unable to update announcement" }, { status: 500 });
+  }
+
+  const authorName = profile?.display_name || "Admin";
+  return NextResponse.json({ announcement: { ...data, author_name: authorName } });
 }
 
 export async function DELETE(request: Request) {
