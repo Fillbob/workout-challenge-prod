@@ -1,8 +1,16 @@
 "use client";
 
+import { AnnouncementMarkdown } from "@/components/announcement-markdown";
+import {
+  Announcement,
+  createAnnouncement,
+  deleteAnnouncement,
+  listAnnouncements,
+  updateAnnouncement,
+} from "@/lib/announcements";
 import { useRequireAdmin } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Challenge {
   id: string;
@@ -23,14 +31,6 @@ interface AdminTeam {
   join_code: string;
   member_count: number;
   members: { user_id: string; display_name: string }[];
-}
-
-interface Announcement {
-  id: string;
-  title: string;
-  body: string;
-  created_at: string;
-  author_name: string;
 }
 
 const emptyForm: Omit<Challenge, "id"> = {
@@ -57,10 +57,12 @@ export default function AdminPage() {
   const [teamName, setTeamName] = useState("");
   const [teamStatus, setTeamStatus] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [announcementForm, setAnnouncementForm] = useState({ title: "", body: "" });
+  const [announcementForm, setAnnouncementForm] = useState({ title: "", body_md: "" });
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [announcementLoadingIds, setAnnouncementLoadingIds] = useState<Set<string>>(new Set());
+  const announcementEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
@@ -85,13 +87,7 @@ export default function AdminPage() {
 
   const loadAnnouncements = useCallback(async () => {
     try {
-      const response = await fetch("/api/announcements");
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to load announcements");
-      }
-
+      const payload = await listAnnouncements();
       setAnnouncements(payload.announcements ?? []);
       setAnnouncementStatus(null);
     } catch (error) {
@@ -169,11 +165,60 @@ export default function AdminPage() {
     loadChallenges();
   };
 
+  const resetAnnouncementForm = () => {
+    setAnnouncementForm({ title: "", body_md: "" });
+    setEditingAnnouncementId(null);
+  };
+
+  const applyBoldFormatting = () => {
+    const textarea = announcementEditorRef.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const selectedText = value.slice(selectionStart, selectionEnd) || "bold text";
+    const wrapped = `**${selectedText}**`;
+    const nextValue = value.slice(0, selectionStart) + wrapped + value.slice(selectionEnd);
+
+    setAnnouncementForm((prev) => ({ ...prev, body_md: nextValue }));
+
+    requestAnimationFrame(() => {
+      const caretPosition = selectionStart + wrapped.length;
+      textarea.selectionStart = caretPosition;
+      textarea.selectionEnd = caretPosition;
+      textarea.focus();
+    });
+  };
+
+  const applyBulletFormatting = () => {
+    const textarea = announcementEditorRef.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const blockStart = value.lastIndexOf("\n", Math.max(0, selectionStart - 1)) + 1;
+    const blockEndCandidate = value.indexOf("\n", selectionEnd);
+    const blockEnd = blockEndCandidate === -1 ? value.length : blockEndCandidate;
+
+    const selectedBlock = value.slice(blockStart, blockEnd);
+    const lines = (selectedBlock || value.slice(blockStart, selectionEnd)).split("\n");
+    const bulletLines = lines.map((line) => (line.startsWith("- ") ? line : `- ${line}`));
+    const replacement = bulletLines.join("\n");
+    const nextValue = value.slice(0, blockStart) + replacement + value.slice(blockEnd);
+
+    setAnnouncementForm((prev) => ({ ...prev, body_md: nextValue }));
+
+    requestAnimationFrame(() => {
+      const caretPosition = blockStart + replacement.length;
+      textarea.selectionStart = caretPosition;
+      textarea.selectionEnd = caretPosition;
+      textarea.focus();
+    });
+  };
+
   const handleAnnouncementSubmit = async () => {
     const title = announcementForm.title.trim();
-    const body = announcementForm.body.trim();
+    const body_md = announcementForm.body_md.trim();
 
-    if (!title || !body) {
+    if (!title || !body_md) {
       setAnnouncementStatus("Title and message are required");
       return;
     }
@@ -182,23 +227,26 @@ export default function AdminPage() {
     setAnnouncementStatus(null);
 
     try {
-      const response = await fetch("/api/announcements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body }),
-      });
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to publish announcement");
+      if (editingAnnouncementId) {
+        const { announcement } = await updateAnnouncement(editingAnnouncementId, { title, body_md });
+        setAnnouncements((prev) =>
+          prev.map((item) =>
+            item.id === announcement.id
+              ? { ...item, ...announcement, author_name: item.author_name || announcement.author_name }
+              : item
+          )
+        );
+        setAnnouncementStatus("Announcement updated");
+      } else {
+        const { announcement } = await createAnnouncement({ title, body_md });
+        setAnnouncements((prev) => [announcement, ...prev]);
+        setAnnouncementStatus("Announcement published");
       }
 
-      setAnnouncementStatus("Announcement published");
-      setAnnouncementForm({ title: "", body: "" });
+      resetAnnouncementForm();
       loadAnnouncements();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to publish announcement";
+      const message = error instanceof Error ? error.message : "Unable to save announcement";
       setAnnouncementStatus(message);
     } finally {
       setIsPostingAnnouncement(false);
@@ -206,19 +254,18 @@ export default function AdminPage() {
   };
 
   const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm("Delete this announcement?")) return;
+
     setAnnouncementStatus(null);
     setAnnouncementLoadingIds((prev) => new Set(prev).add(id));
 
     try {
-      const response = await fetch(`/api/announcements?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to delete announcement");
-      }
-
+      await deleteAnnouncement(id);
       setAnnouncements((prev) => prev.filter((announcement) => announcement.id !== id));
       setAnnouncementStatus("Announcement deleted");
+      if (editingAnnouncementId === id) {
+        resetAnnouncementForm();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to delete announcement";
       setAnnouncementStatus(message);
@@ -229,6 +276,12 @@ export default function AdminPage() {
         return next;
       });
     }
+  };
+
+  const handleEditAnnouncement = (announcement: Announcement) => {
+    setEditingAnnouncementId(announcement.id);
+    setAnnouncementForm({ title: announcement.title, body_md: announcement.body_md });
+    setAnnouncementStatus(null);
   };
 
   const handleCreateTeam = async () => {
@@ -380,20 +433,64 @@ export default function AdminPage() {
                 placeholder="Headline"
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
               />
-              <textarea
-                value={announcementForm.body}
-                onChange={(e) => setAnnouncementForm((prev) => ({ ...prev, body: e.target.value }))}
-                placeholder="Add a short description or call to action"
-                rows={3}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
-              />
-              <button
-                onClick={handleAnnouncementSubmit}
-                disabled={isPostingAnnouncement}
-                className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white px-4 py-2 rounded-lg"
-              >
-                {isPostingAnnouncement ? "Publishing..." : "Publish announcement"}
-              </button>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300">
+                  <span className="font-semibold text-indigo-200">Formatting</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={applyBoldFormatting}
+                      className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-indigo-100 hover:border-indigo-500 hover:text-indigo-200"
+                    >
+                      Bold
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyBulletFormatting}
+                      className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-indigo-100 hover:border-indigo-500 hover:text-indigo-200"
+                    >
+                      Bullet
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  ref={announcementEditorRef}
+                  value={announcementForm.body_md}
+                  onChange={(e) => setAnnouncementForm((prev) => ({ ...prev, body_md: e.target.value }))}
+                  placeholder="Add markdown content. Use **bold** and - bullets."
+                  rows={6}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleAnnouncementSubmit}
+                  disabled={isPostingAnnouncement}
+                  className="bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white px-4 py-2 rounded-lg"
+                >
+                  {isPostingAnnouncement
+                    ? editingAnnouncementId
+                      ? "Saving..."
+                      : "Publishing..."
+                    : editingAnnouncementId
+                      ? "Save changes"
+                      : "Publish announcement"}
+                </button>
+                {editingAnnouncementId && (
+                  <button onClick={resetAnnouncementForm} className="text-slate-300 underline">
+                    Cancel
+                  </button>
+                )}
+              </div>
+              <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-300">Preview</p>
+                <div className="prose prose-invert max-w-none text-sm text-slate-100">
+                  <AnnouncementMarkdown
+                    content={announcementForm.body_md || "*Start typing to see a preview here.*"}
+                    className="space-y-2"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-3">
@@ -403,19 +500,32 @@ export default function AdminPage() {
                   <div key={announcement.id} className="rounded-md border border-slate-800 bg-slate-900 p-3 text-sm space-y-2">
                     <div className="flex items-center justify-between text-xs text-slate-400">
                       <span>{announcement.author_name}</span>
-                      <span>{new Date(announcement.created_at).toLocaleString()}</span>
+                      <div className="text-right">
+                        <p>{new Date(announcement.created_at).toLocaleString()}</p>
+                        {announcement.updated_at && announcement.updated_at !== announcement.created_at && (
+                          <p className="text-[10px] text-slate-500">Edited {new Date(announcement.updated_at).toLocaleString()}</p>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <p className="text-slate-100 font-semibold">{announcement.title}</p>
-                      <p className="text-slate-300">{announcement.body}</p>
+                      <AnnouncementMarkdown content={announcement.body_md} className="prose prose-invert max-w-none text-slate-200" />
                     </div>
-                    <button
-                      onClick={() => handleDeleteAnnouncement(announcement.id)}
-                      disabled={announcementLoadingIds.has(announcement.id)}
-                      className="text-xs font-semibold text-rose-300 hover:text-rose-200 disabled:opacity-50"
-                    >
-                      {announcementLoadingIds.has(announcement.id) ? "Removing..." : "Delete"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleEditAnnouncement(announcement)}
+                        className="text-xs font-semibold text-indigo-300 hover:text-indigo-200"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAnnouncement(announcement.id)}
+                        disabled={announcementLoadingIds.has(announcement.id)}
+                        className="text-xs font-semibold text-rose-300 hover:text-rose-200 disabled:opacity-50"
+                      >
+                        {announcementLoadingIds.has(announcement.id) ? "Removing..." : "Delete"}
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {announcements.length === 0 && (
