@@ -2,8 +2,8 @@
 
 import { useRequireUser } from "@/lib/auth";
 import { getProfileIcon } from "@/lib/profileIcons";
-import { ChevronDown, ChevronUp, ChevronsDown, ChevronsUp } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RankChangeIndicator } from "@/components/RankChangeIndicator";
 
 interface PublicTeam {
   id: string;
@@ -76,7 +76,21 @@ export default function LeaderboardPage() {
   const [focusedUser, setFocusedUser] = useState<string | null>(null);
 
   const activityOffsetRef = useRef(0);
-  const previousRowsRef = useRef<LeaderboardRow[]>([]);
+  const previousRanksRef = useRef<Record<string, Record<string, number>>>({});
+
+  // Load any stored rank snapshots so we can compare movement on the next fetch.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("leaderboardPreviousRanks");
+    if (!stored) return;
+
+    try {
+      previousRanksRef.current = JSON.parse(stored);
+    } catch (error) {
+      console.error("Failed to parse stored leaderboard ranks", error);
+      previousRanksRef.current = {};
+    }
+  }, []);
 
   const PAGE_SIZE = 15;
 
@@ -120,6 +134,20 @@ export default function LeaderboardPage() {
     [],
   );
 
+  const persistRanks = useCallback((teamId: string, leaderboard: LeaderboardRow[]) => {
+    const nextSnapshot: Record<string, number> = {};
+    leaderboard.forEach((row, index) => {
+      nextSnapshot[row.user_id] = index;
+    });
+
+    const mergedSnapshots = { ...previousRanksRef.current, [teamId]: nextSnapshot };
+    previousRanksRef.current = mergedSnapshots;
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("leaderboardPreviousRanks", JSON.stringify(mergedSnapshots));
+    }
+  }, []);
+
   const loadLeaderboard = useCallback(
     async (teamId: string, reset = true) => {
       setStatus(null);
@@ -152,14 +180,13 @@ export default function LeaderboardPage() {
         const contributionCount = Object.values(returnedContributions).reduce((count, list) => count + list.length, 0);
 
         const incomingLeaderboard: LeaderboardRow[] = payload.leaderboard ?? [];
-        const previousRankings = reset
-          ? new Map<string, number>()
-          : new Map(previousRowsRef.current.map((row, index) => [row.user_id, index]));
+        const previousRankings = previousRanksRef.current[teamId] ?? {};
 
         const movement: Record<string, number> = {};
         incomingLeaderboard.forEach((row, index) => {
-          const previousIndex = previousRankings.get(row.user_id);
+          const previousIndex = previousRankings[row.user_id];
           if (previousIndex === undefined) return;
+          // Delta is previousRank - currentRank so positive values mean they moved closer to #1.
           const delta = previousIndex - index;
           if (delta !== 0) {
             movement[row.user_id] = delta;
@@ -168,7 +195,7 @@ export default function LeaderboardPage() {
 
         setPositionChanges(movement);
         setRows(incomingLeaderboard);
-        previousRowsRef.current = incomingLeaderboard;
+        persistRanks(teamId, incomingLeaderboard);
         setContributions((prev) => appendContributions(prev, returnedContributions, reset));
         setActivityHasMore(Boolean(payload.hasMore));
         const nextOffset = offset + contributionCount;
@@ -180,7 +207,7 @@ export default function LeaderboardPage() {
         setActivityLoading(false);
       }
     },
-    [PAGE_SIZE, appendContributions],
+    [PAGE_SIZE, appendContributions, persistRanks],
   );
 
   useRequireUser((id) => setUserId(id));
@@ -435,39 +462,14 @@ export default function LeaderboardPage() {
                             <div className="flex-1">
                               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                  <p className="text-base font-semibold text-slate-900">{row.name}</p>
+                                  <div className="flex items-center gap-1">
+                                    <p className="text-base font-semibold text-slate-900">{row.name}</p>
+                                    <RankChangeIndicator delta={change} />
+                                  </div>
                                   <p className="text-xs text-slate-500">{row.completed_count} completions</p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">
-                                    {row.points} pts
-                                    {change && (
-                                      <span
-                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                                          change > 0
-                                            ? "border-green-100 bg-green-50 text-green-700"
-                                            : "border-rose-100 bg-rose-50 text-rose-700"
-                                        }`}
-                                      >
-                                        {Math.abs(change) === 1 ? (
-                                          change > 0 ? (
-                                            <ChevronUp className="h-4 w-4" aria-hidden />
-                                          ) : (
-                                            <ChevronDown className="h-4 w-4" aria-hidden />
-                                          )
-                                        ) : change > 0 ? (
-                                          <ChevronsUp className="h-4 w-4" aria-hidden />
-                                        ) : (
-                                          <ChevronsDown className="h-4 w-4" aria-hidden />
-                                        )}
-                                        <span className="sr-only">
-                                          {change > 0
-                                            ? `Moved up ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`
-                                            : `Moved down ${Math.abs(change)} position${Math.abs(change) > 1 ? "s" : ""}`}
-                                        </span>
-                                      </span>
-                                    )}
-                                  </p>
+                                  <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">{row.points} pts</p>
                                   <button
                                     onClick={() => setExpandedUser(isExpanded ? null : row.user_id)}
                                     className="text-xs font-semibold text-orange-600 underline underline-offset-4 transition hover:text-orange-700"
