@@ -40,6 +40,12 @@ function extractErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function isMissingTableError(error: unknown, table: string) {
+  const message = extractErrorMessage(error).toLowerCase();
+  const normalizedTable = `public.${table}`.toLowerCase();
+  return message.includes(normalizedTable) || message.includes(`missing ${table.toLowerCase()} table`);
+}
+
 function normalizeSchemaError(error: unknown, context: string) {
   const message = extractErrorMessage(error);
 
@@ -92,7 +98,13 @@ async function loadExistingProgress(userId: string, challengeIds: string[]) {
     .eq("user_id", userId)
     .in("challenge_id", challengeIds);
 
-  if (error) throw new Error(normalizeSchemaError(error, "Failed to load submission progress"));
+  if (error) {
+    if (isMissingTableError(error, "submission_progress")) {
+      console.warn("Submission progress table missing; proceeding without historical totals");
+      return new Map<string, number>();
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to load submission progress"));
+  }
   const totals = new Map<string, number>();
   (data ?? []).forEach((row) => {
     const current = totals.get(row.challenge_id) ?? 0;
@@ -126,6 +138,10 @@ async function markActivityProcessed(userId: string, activityId: number, raw_pay
     .insert({ user_id: userId, activity_id: activityId, raw_payload });
 
   if (error) {
+    if (isMissingTableError(error, "strava_activity_ingestions")) {
+      console.warn("Strava ingestion table missing; skipping ingestion record");
+      return;
+    }
     throw new Error(normalizeSchemaError(error, "Failed to record ingestion"));
   }
 }
@@ -136,7 +152,13 @@ async function wasActivityProcessed(activityId: number) {
     .from("strava_activity_ingestions")
     .select("id", { count: "exact", head: true })
     .eq("activity_id", activityId);
-  if (error) throw error;
+  if (error) {
+    if (isMissingTableError(error, "strava_activity_ingestions")) {
+      console.warn("Strava ingestion table missing; treating activities as unprocessed");
+      return false;
+    }
+    throw error;
+  }
   return (count ?? 0) > 0;
 }
 
@@ -166,8 +188,13 @@ async function upsertSubmissionProgress(
     );
 
   if (error) {
+    if (isMissingTableError(error, "submission_progress")) {
+      console.warn("Submission progress table missing; skipping progress upsert");
+      return false;
+    }
     throw new Error(normalizeSchemaError(error, "Failed to upsert submission progress"));
   }
+  return true;
 }
 
 async function upsertSubmission(userId: string, challengeId: string, completed: boolean, completedAt: string | null) {
@@ -270,7 +297,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
       const metricValue = selectMetricValue(activity, challenge.metric_type!);
       if (typeof metricValue !== "number") continue;
 
-      await upsertSubmissionProgress(
+      const progressRecorded = await upsertSubmissionProgress(
         refreshed.user_id,
         challenge.id,
         activity.id,
@@ -280,10 +307,12 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
         null,
       );
 
-      const current = newProgress.get(challenge.id) ?? 0;
-      newProgress.set(challenge.id, current + metricValue);
-      matchedThisActivity = true;
-      progressUpdates += 1;
+      if (progressRecorded) {
+        const current = newProgress.get(challenge.id) ?? 0;
+        newProgress.set(challenge.id, current + metricValue);
+        matchedThisActivity = true;
+        progressUpdates += 1;
+      }
     }
 
     if (matchedThisActivity) matchedActivities += 1;
