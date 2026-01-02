@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { AnnouncementMarkdown } from "@/components/announcement-markdown";
 import { Announcement, listAnnouncements } from "@/lib/announcements";
 import { useRequireUser } from "@/lib/auth";
