@@ -21,6 +21,7 @@ export type ChallengeRow = {
   hidden?: boolean | null;
   metric_type?: string | null;
   target_value?: number | null;
+  activity_types?: string[] | null;
 };
 
 export type StravaConnection = {
@@ -139,6 +140,15 @@ export function activityMatchesChallenge(
     if (!allowed) return false;
   }
 
+  if (challenge.activity_types && challenge.activity_types.length > 0) {
+    const activityType = activity.raw.type;
+    if (!activityType) return false;
+
+    const normalizedActivityType = activityType.toLowerCase();
+    const allowedTypes = challenge.activity_types.map((type) => type.toLowerCase());
+    if (!allowedTypes.includes(normalizedActivityType)) return false;
+  }
+
   const metricValue = selectMetricValue(activity, challenge.metric_type);
   return typeof metricValue === "number" && Number.isFinite(metricValue) && metricValue > 0;
 }
@@ -162,7 +172,9 @@ export async function loadActiveChallenges() {
   const admin = getServiceRoleClient();
   const { data, error } = await admin
     .from("challenges")
-    .select("id, start_date, end_date, team_ids, hidden, metric_type, target_value")
+    .select(
+      "id, start_date, end_date, team_ids, hidden, metric_type, target_value, activity_types",
+    )
     .eq("hidden", false);
 
   if (error) throw error;
