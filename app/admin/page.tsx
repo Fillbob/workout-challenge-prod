@@ -28,6 +28,7 @@ interface Challenge {
   metric_type: ChallengeMetricType;
   target_value: number | null;
   target_unit: string | null;
+  progress_unit?: string | null;
   activity_types: string[] | null;
 }
 
@@ -52,6 +53,7 @@ const emptyForm: Omit<Challenge, "id"> = {
   metric_type: "manual",
   target_value: null,
   target_unit: null,
+  progress_unit: null,
   activity_types: [],
 };
 
@@ -107,6 +109,7 @@ export default function AdminPage() {
             ? Number(challenge.target_value)
             : null,
       target_unit: challenge.target_unit ?? null,
+      progress_unit: challenge.progress_unit ?? null,
       activity_types: challenge.activity_types ?? [],
     }));
     setChallenges(normalized as Challenge[]);
