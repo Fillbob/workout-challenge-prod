@@ -40,6 +40,24 @@ function extractErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function normalizeSchemaError(error: unknown, context: string) {
+  const message = extractErrorMessage(error);
+
+  if (message.includes("public.submission_progress")) {
+    return `${context}: missing submission_progress table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  if (message.includes("public.strava_activity_ingestions")) {
+    return `${context}: missing strava_activity_ingestions table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  if (message.includes("public.strava_sync_logs")) {
+    return `${context}: missing strava_sync_logs table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  return `${context}: ${message}`;
+}
+
 async function loadConnections(athleteId?: number | null) {
   const admin = getServiceRoleClient();
   const query = admin
@@ -73,7 +91,8 @@ async function loadExistingProgress(userId: string, challengeIds: string[]) {
     .select("challenge_id, progress_value")
     .eq("user_id", userId)
     .in("challenge_id", challengeIds);
-  if (error) throw error;
+
+  if (error) throw new Error(normalizeSchemaError(error, "Failed to load submission progress"));
   const totals = new Map<string, number>();
   (data ?? []).forEach((row) => {
     const current = totals.get(row.challenge_id) ?? 0;
@@ -102,9 +121,13 @@ async function loadExistingCompletion(userId: string, challengeIds: string[]) {
 
 async function markActivityProcessed(userId: string, activityId: number, raw_payload: unknown) {
   const admin = getServiceRoleClient();
-  await admin
+  const { error } = await admin
     .from("strava_activity_ingestions")
     .insert({ user_id: userId, activity_id: activityId, raw_payload });
+
+  if (error) {
+    throw new Error(normalizeSchemaError(error, "Failed to record ingestion"));
+  }
 }
 
 async function wasActivityProcessed(activityId: number) {
@@ -127,7 +150,7 @@ async function upsertSubmissionProgress(
   completedAt: string | null,
 ) {
   const admin = getServiceRoleClient();
-  await admin
+  const { error } = await admin
     .from("submission_progress")
     .upsert(
       {
@@ -141,6 +164,10 @@ async function upsertSubmissionProgress(
       },
       { onConflict: "challenge_id,user_id,activity_id" },
     );
+
+  if (error) {
+    throw new Error(normalizeSchemaError(error, "Failed to upsert submission progress"));
+  }
 }
 
 async function upsertSubmission(userId: string, challengeId: string, completed: boolean, completedAt: string | null) {
