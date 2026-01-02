@@ -62,4 +62,18 @@ create table if not exists public.strava_sync_logs (
   sample_activities jsonb
 );
 
+-- Backfill compatible columns when the table already exists.
+alter table if exists public.strava_sync_logs
+  add column if not exists athlete_id bigint,
+  add column if not exists started_at timestamptz not null default now(),
+  add column if not exists finished_at timestamptz not null default now(),
+  add column if not exists since timestamptz,
+  add column if not exists fetched_activities integer,
+  add column if not exists processed_activities integer,
+  add column if not exists matched_activities integer,
+  add column if not exists progress_updates integer,
+  add column if not exists status text not null default 'started',
+  add column if not exists error text,
+  add column if not exists sample_activities jsonb;
+
 create index if not exists strava_sync_logs_user_idx on public.strava_sync_logs(user_id, started_at desc);

@@ -165,7 +165,7 @@ async function recordSyncLog({
   error?: string | null;
 }) {
   const admin = getServiceRoleClient();
-  await admin.from("strava_sync_logs").insert({
+  const { error: logError } = await admin.from("strava_sync_logs").insert({
     user_id: result?.userId ?? connection.user_id,
     athlete_id: result?.athleteId ?? connection.athlete_id ?? null,
     started_at: startedAt.toISOString(),
@@ -179,6 +179,15 @@ async function recordSyncLog({
     status,
     error: error ?? null,
   });
+
+  if (logError) {
+    console.error("Failed to persist Strava sync log", {
+      message: logError.message,
+      details: logError.details,
+      hint: logError.hint,
+      code: logError.code,
+    });
+  }
 }
 
 async function syncConnection(connection: StravaConnection, challenges: ChallengeRow[]): Promise<StravaSyncResult> {
