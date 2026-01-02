@@ -7,6 +7,8 @@ import { profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
+
 interface Challenge {
   id: string;
   week_index: number;
@@ -18,9 +20,10 @@ interface Challenge {
   base_points: number;
   team_ids: string[] | null;
   hidden?: boolean;
-  target_value?: number | null;
-  progress_unit?: string | null;
-  strava_metric?: string | null;
+  metric_type: ChallengeMetricType;
+  target_value: number | null;
+  target_unit: string | null;
+  activity_types: string[] | null;
 }
 
 interface Submission {
@@ -448,12 +451,22 @@ export default function DashboardPage() {
     }
     const normalized = (data ?? []).map((challenge) => {
       const parsedIndex = Number(challenge.challenge_index);
+      const parsedTargetValue = Number(challenge.target_value);
 
       return {
         ...challenge,
         challenge_index: Number.isFinite(parsedIndex) ? parsedIndex : 1,
         team_ids: challenge.team_ids ?? [],
         hidden: Boolean(challenge.hidden),
+        metric_type: (challenge.metric_type as ChallengeMetricType | null) ?? "manual",
+        target_value:
+          challenge.target_value === null || challenge.target_value === undefined
+            ? null
+            : Number.isFinite(parsedTargetValue)
+              ? parsedTargetValue
+              : null,
+        target_unit: challenge.target_unit ?? null,
+        activity_types: challenge.activity_types ?? [],
       };
     });
     setChallenges(normalized as Challenge[]);
