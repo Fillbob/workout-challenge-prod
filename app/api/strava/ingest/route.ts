@@ -15,7 +15,6 @@ import { NextResponse } from "next/server";
 
 const CRON_SECRET = process.env.STRAVA_CRON_SECRET;
 const STRAVA_WEBHOOK_SECRET = process.env.STRAVA_WEBHOOK_SECRET;
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 async function authorizeWithSecret(request: Request, athleteId: number | null) {
   if (athleteId && STRAVA_WEBHOOK_SECRET) {
@@ -46,8 +45,9 @@ async function loadConnections(athleteId?: number | null) {
   return data ?? [];
 }
 
-async function loadUserConnections(userId: string, supabase: SupabaseServerClient) {
-  const { data, error } = await supabase
+async function loadUserConnections(userId: string) {
+  const admin = getServiceRoleClient();
+  const { data, error } = await admin
     .from("strava_connections")
     .select("user_id, access_token, refresh_token, expires_at, athlete_id, last_synced_at")
     .eq("user_id", userId);
@@ -245,7 +245,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      connections = await loadUserConnections(user.id, supabase);
+      connections = await loadUserConnections(user.id);
       if (connections.length === 0) {
         return NextResponse.json({ error: "No Strava connection found" }, { status: 403 });
       }
@@ -265,7 +265,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ status: "processed", connections: connections.length });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to ingest Strava data";
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error && "message" in error
+          ? String((error as { message: unknown }).message)
+          : "Unable to ingest Strava data";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
