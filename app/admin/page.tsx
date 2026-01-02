@@ -71,6 +71,7 @@ export default function AdminPage() {
   const [role, setRole] = useState<string | null>(null);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [activityTypesInput, setActivityTypesInput] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [teams, setTeams] = useState<AdminTeam[]>([]);
@@ -157,6 +158,7 @@ export default function AdminPage() {
 
   const resetForm = () => {
     setForm(emptyForm);
+    setActivityTypesInput("");
     setEditingId(null);
   };
 
@@ -403,6 +405,7 @@ export default function AdminPage() {
 
   const startEditing = (challenge: Challenge) => {
     setEditingId(challenge.id);
+    setActivityTypesInput((challenge.activity_types ?? []).join(", "));
     setForm({
       week_index: challenge.week_index,
       challenge_index: challenge.challenge_index ?? 1,
@@ -731,16 +734,18 @@ export default function AdminPage() {
                 <label className="space-y-2 text-sm md:col-span-2">
                   <span className="text-slate-300">Allowed Strava activity types (optional)</span>
                   <input
-                    value={(form.activity_types ?? []).join(", ")}
-                    onChange={(e) =>
+                    value={activityTypesInput}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setActivityTypesInput(value);
                       setForm({
                         ...form,
-                        activity_types: e.target.value
+                        activity_types: value
                           .split(",")
-                          .map((value) => value.trim())
+                          .map((item) => item.trim())
                           .filter(Boolean),
-                      })
-                    }
+                      });
+                    }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                     placeholder="Comma-separated list (e.g. Run, Walk, Ride)"
                   />
