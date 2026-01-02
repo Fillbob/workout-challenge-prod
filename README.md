@@ -80,6 +80,7 @@ If you wish to just develop locally and not deploy to Vercel, [follow the steps 
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
   STRAVA_CLIENT_ID=[STRAVA APPLICATION CLIENT ID]
   STRAVA_CLIENT_SECRET=[STRAVA APPLICATION CLIENT SECRET]
+  STRAVA_REDIRECT_URI=[OPTIONAL FULL STRAVA REDIRECT URI, DEFAULTS TO <SITE_URL>/api/strava/redirect]
   ```
   > [!NOTE]
   > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.

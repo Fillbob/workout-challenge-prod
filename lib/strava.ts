@@ -41,6 +41,9 @@ export function buildStravaAuthUrl(state: string) {
 }
 
 export function getStravaRedirectUri() {
+  const envOverride = process.env.STRAVA_REDIRECT_URI;
+  if (envOverride) return envOverride;
+
   return `${getSiteUrl()}/api/strava/redirect`;
 }
 
