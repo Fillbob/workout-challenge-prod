@@ -1,14 +1,11 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { AnnouncementMarkdown } from "@/components/announcement-markdown";
 import { Announcement, listAnnouncements } from "@/lib/announcements";
 import { useRequireUser } from "@/lib/auth";
 import { profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 interface Challenge {
   id: string;
@@ -299,7 +296,7 @@ function LineChart({ data }: { data: WeeklyPoints[] }) {
 
 export default function DashboardPage() {
   const supabase = getSupabaseClient();
-  const searchParams = useSearchParams();
+  const [searchParams, setSearchParams] = useState<URLSearchParams | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [userIdentifier, setUserIdentifier] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -334,6 +331,7 @@ export default function DashboardPage() {
   const [stravaStatus, setStravaStatus] = useState<StravaStatus>({ status: "disconnected", lastError: null });
   const [stravaMessage, setStravaMessage] = useState<string | null>(null);
   const [stravaLoading, setStravaLoading] = useState(false);
+  const [hasReadQueryParams, setHasReadQueryParams] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -619,6 +617,13 @@ export default function DashboardPage() {
   ]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || hasReadQueryParams) return;
+
+    setSearchParams(new URLSearchParams(window.location.search));
+    setHasReadQueryParams(true);
+  }, [hasReadQueryParams]);
+
+  useEffect(() => {
     if (teams.length === 0) {
       clearActiveTeam();
       return;
@@ -649,8 +654,8 @@ export default function DashboardPage() {
   }, [stravaMessage]);
 
   useEffect(() => {
-    const stravaParam = searchParams.get("strava");
-    const stravaError = searchParams.get("message");
+    const stravaParam = searchParams?.get("strava");
+    const stravaError = searchParams?.get("message");
 
     if (!stravaParam) return;
 
