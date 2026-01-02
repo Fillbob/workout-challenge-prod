@@ -1086,6 +1086,26 @@ export default function DashboardPage() {
       .sort((a, b) => a.week - b.week);
   }, [submissionState, visibleChallenges]);
 
+  const formatTimestamp = (value: string | null) => {
+    if (!value) return "";
+    return new Date(value).toLocaleString();
+  };
+
+  const formatRelativeTime = (value: string | null | undefined) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const diffMs = Date.now() - date.getTime();
+    const minutes = Math.round(diffMs / 60000);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  };
+
   const stravaConnectionInfo = useMemo(() => {
     if (stravaStatus.status !== "connected") {
       return {
@@ -1232,26 +1252,6 @@ export default function DashboardPage() {
     if (!activeTeamId) return;
     loadRecentActivity(activeTeamId, true);
   }, [activeTeamId, loadRecentActivity]);
-
-  const formatTimestamp = (value: string | null) => {
-    if (!value) return "";
-    return new Date(value).toLocaleString();
-  };
-
-  const formatRelativeTime = (value: string | null | undefined) => {
-    if (!value) return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-
-    const diffMs = Date.now() - date.getTime();
-    const minutes = Math.round(diffMs / 60000);
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
-    const days = Math.round(hours / 24);
-    return `${days} day${days === 1 ? "" : "s"} ago`;
-  };
 
   const nextClosing = useMemo(() => {
     if (!currentTime) return null;
