@@ -31,6 +31,15 @@ async function authorizeWithSecret(request: Request, athleteId: number | null) {
   return false;
 }
 
+function extractErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return "Unknown error";
+}
+
 async function loadConnections(athleteId?: number | null) {
   const admin = getServiceRoleClient();
   const query = admin
@@ -341,7 +350,12 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         const admin = getServiceRoleClient();
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message = extractErrorMessage(error);
+        console.error("Strava sync failed", {
+          user_id: connection.user_id,
+          athlete_id: connection.athlete_id,
+          error: message,
+        });
         await admin
           .from("strava_connections")
           .update({ last_error: message, updated_at: new Date().toISOString() })
