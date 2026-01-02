@@ -113,3 +113,11 @@ Please file feedback and issues over on the [Supabase GitHub org](https://github
 - [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
 - [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
 - [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+
+## Strava ingestion
+
+- Scheduled imports and webhook retries can post to `/api/strava/ingest`.
+- Protect cron calls with `STRAVA_CRON_SECRET`; webhook callbacks can use `STRAVA_WEBHOOK_SECRET`.
+- Challenges with `metric_type` and `target_value` will auto-update progress by normalizing Strava
+  activity metrics (distance, moving_time, elevation, steps) into `submission_progress` and
+  `submissions`.
