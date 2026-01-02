@@ -12,6 +12,8 @@ import { useRequireAdmin } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
+
 interface Challenge {
   id: string;
   week_index: number;
@@ -23,6 +25,10 @@ interface Challenge {
   base_points: number;
   team_ids: string[] | null;
   hidden?: boolean;
+  metric_type: ChallengeMetricType;
+  target_value: number | null;
+  target_unit: string | null;
+  activity_types: string[] | null;
 }
 
 interface AdminTeam {
@@ -43,7 +49,19 @@ const emptyForm: Omit<Challenge, "id"> = {
   base_points: 10,
   team_ids: [],
   hidden: false,
+  metric_type: "manual",
+  target_value: null,
+  target_unit: null,
+  activity_types: [],
 };
+
+const metricTypeOptions: { value: ChallengeMetricType; label: string; helper?: string }[] = [
+  { value: "manual", label: "Manual", helper: "Participants self-report their progress" },
+  { value: "distance", label: "Distance", helper: "Track miles/kilometers or similar" },
+  { value: "duration", label: "Duration", helper: "Track minutes or hours" },
+  { value: "elevation", label: "Elevation", helper: "Track total elevation gain" },
+  { value: "steps", label: "Steps", helper: "Track total step count" },
+];
 
 export default function AdminPage() {
   const supabase = getSupabaseClient();
@@ -81,6 +99,15 @@ export default function AdminPage() {
         : 1,
       team_ids: challenge.team_ids ?? [],
       hidden: Boolean(challenge.hidden),
+      metric_type: (challenge.metric_type as ChallengeMetricType | null) ?? "manual",
+      target_value:
+        challenge.target_value === null || challenge.target_value === undefined
+          ? null
+          : Number.isFinite(Number(challenge.target_value))
+            ? Number(challenge.target_value)
+            : null,
+      target_unit: challenge.target_unit ?? null,
+      activity_types: challenge.activity_types ?? [],
     }));
     setChallenges(normalized as Challenge[]);
   }, [setChallenges, setStatus, supabase]);
@@ -136,7 +163,11 @@ export default function AdminPage() {
     if (editingId) {
       const { error } = await supabase
         .from("challenges")
-        .update(form)
+        .update({
+          ...form,
+          target_value: Number.isFinite(form.target_value ?? NaN) ? form.target_value : null,
+          activity_types: form.activity_types ?? [],
+        })
         .eq("id", editingId);
       if (error) {
         setStatus(error.message);
@@ -144,7 +175,11 @@ export default function AdminPage() {
       }
       setStatus("Challenge updated");
     } else {
-      const { error } = await supabase.from("challenges").insert(form);
+      const { error } = await supabase.from("challenges").insert({
+        ...form,
+        target_value: Number.isFinite(form.target_value ?? NaN) ? form.target_value : null,
+        activity_types: form.activity_types ?? [],
+      });
       if (error) {
         setStatus(error.message);
         return;
@@ -375,6 +410,10 @@ export default function AdminPage() {
       base_points: challenge.base_points,
       team_ids: challenge.team_ids ?? [],
       hidden: Boolean(challenge.hidden),
+      metric_type: challenge.metric_type ?? "manual",
+      target_value: challenge.target_value ?? null,
+      target_unit: challenge.target_unit ?? null,
+      activity_types: challenge.activity_types ?? [],
     });
   };
 
@@ -640,6 +679,71 @@ export default function AdminPage() {
                     onChange={(e) => setForm({ ...form, base_points: Number(e.target.value) })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                   />
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="text-slate-300">Goal metric</span>
+                  <select
+                    value={form.metric_type}
+                    onChange={(e) =>
+                      setForm({ ...form, metric_type: e.target.value as ChallengeMetricType })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+                  >
+                    {metricTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    {metricTypeOptions.find((option) => option.value === form.metric_type)?.helper}
+                  </p>
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="text-slate-300">Target value (optional)</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.target_value ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        target_value: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+                  />
+                  <p className="text-xs text-slate-500">Leave blank when progress is manual-only.</p>
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="text-slate-300">Target unit (optional)</span>
+                  <input
+                    value={form.target_unit ?? ""}
+                    onChange={(e) => setForm({ ...form, target_unit: e.target.value || null })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+                    placeholder="e.g. miles, minutes, floors"
+                  />
+                  <p className="text-xs text-slate-500">Shown for context alongside numeric goals.</p>
+                </label>
+                <label className="space-y-2 text-sm md:col-span-2">
+                  <span className="text-slate-300">Allowed Strava activity types (optional)</span>
+                  <input
+                    value={(form.activity_types ?? []).join(", ")}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        activity_types: e.target.value
+                          .split(",")
+                          .map((value) => value.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+                    placeholder="Comma-separated list (e.g. Run, Walk, Ride)"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Leave empty to accept all activity types from Strava or non-Strava submissions.
+                  </p>
                 </label>
                 <label className="space-y-2 text-sm md:col-span-2">
                   <span className="text-slate-300">Title</span>
