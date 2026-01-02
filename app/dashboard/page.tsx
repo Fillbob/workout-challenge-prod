@@ -6,6 +6,7 @@ import { useRequireUser } from "@/lib/auth";
 import { profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 interface Challenge {
   id: string;
@@ -59,6 +60,10 @@ interface WeeklyPoints {
   points: number;
 }
 
+type StravaStatus =
+  | { status: "disconnected"; lastError: string | null }
+  | { status: "connected"; athleteId: number | null; expiresAt: string | null; lastError: string | null };
+
 interface TeamMessage {
   id: string;
   message: string;
@@ -89,6 +94,7 @@ const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
   startDateLabel: null,
   daysUntilClose: null,
 };
+const STRAVA_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
 function parseDateSafe(value: string | null): Date | null {
   if (!value) return null;
@@ -291,6 +297,7 @@ function LineChart({ data }: { data: WeeklyPoints[] }) {
 
 export default function DashboardPage() {
   const supabase = getSupabaseClient();
+  const searchParams = useSearchParams();
   const [userId, setUserId] = useState<string | null>(null);
   const [userIdentifier, setUserIdentifier] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -322,6 +329,9 @@ export default function DashboardPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [lastSeenMessageIds, setLastSeenMessageIds] = useState<Record<string, string | null>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [stravaStatus, setStravaStatus] = useState<StravaStatus>({ status: "disconnected", lastError: null });
+  const [stravaMessage, setStravaMessage] = useState<string | null>(null);
+  const [stravaLoading, setStravaLoading] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -482,6 +492,106 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const loadStravaStatus = useCallback(async () => {
+    if (!userId) return;
+    setStravaLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("strava_tokens")
+        .select("athlete_id, expires_at, last_error")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        setStravaStatus({ status: "disconnected", lastError: null });
+        return;
+      }
+
+      setStravaStatus({
+        status: "connected",
+        athleteId: data.athlete_id ?? null,
+        expiresAt: data.expires_at,
+        lastError: data.last_error ?? null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load Strava connection";
+      setStravaStatus({ status: "disconnected", lastError: message });
+    } finally {
+      setStravaLoading(false);
+    }
+  }, [supabase, userId]);
+
+  const refreshStravaConnection = useCallback(
+    async (showMessage = false, showLoader = true) => {
+      if (showLoader) {
+        setStravaLoading(true);
+      }
+
+      try {
+        const response = await fetch("/api/strava/refresh", { method: "POST" });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to refresh Strava tokens");
+        }
+
+        if (payload.status === "disconnected") {
+          setStravaStatus({ status: "disconnected", lastError: payload.last_error ?? null });
+        } else {
+          setStravaStatus({
+            status: "connected",
+            athleteId: payload.athlete_id ?? null,
+            expiresAt: payload.expires_at ?? null,
+            lastError: payload.last_error ?? null,
+          });
+        }
+
+        if (showMessage) {
+          setStravaMessage("Strava connection refreshed");
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to refresh Strava connection";
+        setStravaStatus({ status: "disconnected", lastError: message });
+        setStravaMessage(message);
+      } finally {
+        if (showLoader) {
+          setStravaLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const handleStravaDisconnect = useCallback(async () => {
+    setStravaLoading(true);
+    try {
+      const response = await fetch("/api/strava/disconnect", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to disconnect Strava");
+      }
+      setStravaStatus({ status: "disconnected", lastError: null });
+      setStravaMessage("Strava disconnected");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to disconnect Strava";
+      setStravaStatus({ status: "disconnected", lastError: message });
+      setStravaMessage(message);
+    } finally {
+      setStravaLoading(false);
+    }
+  }, []);
+
+  const startStravaAuth = useCallback(() => {
+    setStravaMessage(null);
+    setStravaLoading(true);
+    window.location.href = "/api/strava/auth";
+  }, []);
+
   useRequireUser((id) => {
     setUserId(id);
   });
@@ -493,9 +603,18 @@ export default function DashboardPage() {
     loadChallenges();
     loadSubmissions(userId);
     loadAnnouncements();
+    loadStravaStatus();
     const stored = window.localStorage.getItem("activeTeamId");
     if (stored) setActiveTeamId(stored);
-  }, [userId, initializeProfile, loadTeams, loadChallenges, loadSubmissions, loadAnnouncements]);
+  }, [
+    userId,
+    initializeProfile,
+    loadTeams,
+    loadChallenges,
+    loadSubmissions,
+    loadAnnouncements,
+    loadStravaStatus,
+  ]);
 
   useEffect(() => {
     if (teams.length === 0) {
@@ -520,6 +639,38 @@ export default function DashboardPage() {
     const timer = window.setTimeout(() => setChatStatus(null), 3000);
     return () => window.clearTimeout(timer);
   }, [chatStatus]);
+
+  useEffect(() => {
+    if (!stravaMessage) return;
+    const timer = window.setTimeout(() => setStravaMessage(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [stravaMessage]);
+
+  useEffect(() => {
+    const stravaParam = searchParams.get("strava");
+    const stravaError = searchParams.get("message");
+
+    if (!stravaParam) return;
+
+    if (stravaParam === "connected") {
+      setStravaMessage("Strava connected");
+      loadStravaStatus();
+      refreshStravaConnection(false, false);
+    }
+
+    if (stravaParam === "error") {
+      setStravaStatus({ status: "disconnected", lastError: stravaError });
+      setStravaMessage(stravaError || "Unable to connect to Strava");
+    }
+  }, [loadStravaStatus, refreshStravaConnection, searchParams]);
+
+  useEffect(() => {
+    if (stravaStatus.status !== "connected") return;
+
+    refreshStravaConnection(false, false);
+    const timer = window.setInterval(() => refreshStravaConnection(false, false), STRAVA_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshStravaConnection, stravaStatus.status]);
 
   const markChatRead = useCallback(
     (teamId: string) => {
@@ -828,6 +979,29 @@ export default function DashboardPage() {
       .map<WeeklyPoints>(([week, points]) => ({ week: Number(week), points }))
       .sort((a, b) => a.week - b.week);
   }, [submissionState, visibleChallenges]);
+
+  const stravaConnectionInfo = useMemo(() => {
+    if (stravaStatus.status !== "connected") {
+      return {
+        connected: false,
+        expiryLabel: null,
+        athleteId: null,
+        lastError: stravaStatus.lastError,
+      };
+    }
+
+    const expiresAt = stravaStatus.expiresAt ? new Date(stravaStatus.expiresAt) : null;
+    const now = new Date();
+    const minutesUntilExpiry = expiresAt ? Math.max(0, Math.round((expiresAt.getTime() - now.getTime()) / 60000)) : null;
+    const expiryLabel = minutesUntilExpiry !== null ? `${minutesUntilExpiry} min${minutesUntilExpiry === 1 ? "" : "s"} left` : null;
+
+    return {
+      connected: true,
+      expiryLabel,
+      athleteId: stravaStatus.athleteId ?? null,
+      lastError: stravaStatus.lastError,
+    };
+  }, [stravaStatus]);
 
   const toggleChallenge = (challenge: Challenge, checked: boolean) => {
     const closingInfo = getChallengeClosingInfo(challenge, new Date());
@@ -1143,19 +1317,73 @@ export default function DashboardPage() {
                 <p className="text-sm font-semibold text-orange-600">Challenges</p>
                 <h2 className="text-2xl font-semibold text-slate-900">Weekly goals</h2>
               </div>
-              <button
-                onClick={handleSaveSubmissions}
-                disabled={saveDisabled}
-                title={!hasChanges ? "No changes to save." : undefined}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 focus:ring-offset-orange-50 ${
-                  saveDisabled
-                    ? "cursor-not-allowed bg-slate-200 text-slate-500"
-                    : "bg-orange-500 hover:bg-orange-600"
-                }`}
-              >
-                {isSaving ? "Saving..." : "Save progress"}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2 text-left shadow-sm">
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm font-semibold text-slate-900">
+                      {stravaConnectionInfo.connected ? "Strava connected" : "Connect Strava"}
+                    </span>
+                    <span className="text-xs text-slate-600">
+                      {stravaConnectionInfo.connected
+                        ? stravaConnectionInfo.expiryLabel
+                          ? `Renews in ${stravaConnectionInfo.expiryLabel}`
+                          : "Ready to sync activities"
+                        : stravaConnectionInfo.lastError || "Link Strava to read activities"}
+                    </span>
+                  </div>
+                  {stravaConnectionInfo.connected && stravaConnectionInfo.athleteId && (
+                    <span className="rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">
+                      #{stravaConnectionInfo.athleteId}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 ${
+                        stravaConnectionInfo.connected
+                          ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      } ${stravaLoading ? "cursor-not-allowed opacity-60" : ""}`}
+                      onClick={stravaConnectionInfo.connected ? handleStravaDisconnect : startStravaAuth}
+                      disabled={stravaLoading}
+                    >
+                      {stravaLoading
+                        ? "Working..."
+                        : stravaConnectionInfo.connected
+                          ? "Disconnect"
+                          : "Connect Strava"}
+                    </button>
+                    <button
+                      className={`rounded-lg border px-3 py-2 text-xs font-semibold text-slate-700 transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 ${
+                        stravaLoading || !stravaConnectionInfo.connected
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                          : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                      }`}
+                      onClick={() => refreshStravaConnection(true)}
+                      disabled={stravaLoading || !stravaConnectionInfo.connected}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveSubmissions}
+                  disabled={saveDisabled}
+                  title={!hasChanges ? "No changes to save." : undefined}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 focus:ring-offset-orange-50 ${
+                    saveDisabled
+                      ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                      : "bg-orange-500 hover:bg-orange-600"
+                  }`}
+                >
+                  {isSaving ? "Saving..." : "Save progress"}
+                </button>
+              </div>
             </div>
+            {stravaMessage && (
+              <div className="w-fit rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+                {stravaMessage}
+              </div>
+            )}
             {!hasChanges && <p className="text-xs text-slate-500">No changes to save.</p>}
             {saveStatus && (
               <div
