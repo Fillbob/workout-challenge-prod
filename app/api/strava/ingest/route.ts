@@ -10,12 +10,14 @@ import {
   type StravaConnection,
 } from "@/lib/stravaIngestion";
 import { getServiceRoleClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 const CRON_SECRET = process.env.STRAVA_CRON_SECRET;
 const STRAVA_WEBHOOK_SECRET = process.env.STRAVA_WEBHOOK_SECRET;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-async function authorize(request: Request, athleteId: number | null) {
+async function authorizeWithSecret(request: Request, athleteId: number | null) {
   if (athleteId && STRAVA_WEBHOOK_SECRET) {
     const webhookSecret = request.headers.get("x-strava-webhook-secret");
     if (webhookSecret === STRAVA_WEBHOOK_SECRET) return true;
@@ -40,6 +42,16 @@ async function loadConnections(athleteId?: number | null) {
   }
 
   const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function loadUserConnections(userId: string, supabase: SupabaseServerClient) {
+  const { data, error } = await supabase
+    .from("strava_connections")
+    .select("user_id, access_token, refresh_token, expires_at, athlete_id, last_synced_at")
+    .eq("user_id", userId);
+
   if (error) throw error;
   return data ?? [];
 }
@@ -212,9 +224,7 @@ export async function POST(request: Request) {
   const payload = await request.json().catch(() => ({}));
   const athleteId = payload?.owner_id ?? payload?.athlete_id ?? null;
 
-  if (!(await authorize(request, athleteId))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const isSecretAuthorized = await authorizeWithSecret(request, athleteId);
 
   try {
     const challenges = await loadActiveChallenges();
@@ -222,7 +232,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "no_challenges" });
     }
 
-    const connections = await loadConnections(athleteId);
+    let connections: StravaConnection[];
+    if (isSecretAuthorized) {
+      connections = await loadConnections(athleteId);
+    } else {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      connections = await loadUserConnections(user.id, supabase);
+      if (connections.length === 0) {
+        return NextResponse.json({ error: "No Strava connection found" }, { status: 403 });
+      }
+    }
     for (const connection of connections) {
       try {
         await syncConnection(connection, challenges);
