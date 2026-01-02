@@ -666,7 +666,7 @@ export default function DashboardPage() {
     }
 
     if (stravaParam === "error") {
-      setStravaStatus({ status: "disconnected", lastError: stravaError });
+      setStravaStatus({ status: "disconnected", lastError: stravaError ?? null });
       setStravaMessage(stravaError || "Unable to connect to Strava");
     }
   }, [loadStravaStatus, refreshStravaConnection, searchParams]);
