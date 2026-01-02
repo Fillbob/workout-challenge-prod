@@ -44,3 +44,22 @@ for each row execute procedure public.set_submission_progress_updated_at();
 -- Allow storing the last time we ran an ingestion for a connection.
 alter table if exists public.strava_connections
   add column if not exists last_synced_at timestamptz;
+
+-- Record Strava sync attempts for debugging.
+create table if not exists public.strava_sync_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  athlete_id bigint,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz not null default now(),
+  since timestamptz,
+  fetched_activities integer,
+  processed_activities integer,
+  matched_activities integer,
+  progress_updates integer,
+  status text not null default 'started',
+  error text,
+  sample_activities jsonb
+);
+
+create index if not exists strava_sync_logs_user_idx on public.strava_sync_logs(user_id, started_at desc);

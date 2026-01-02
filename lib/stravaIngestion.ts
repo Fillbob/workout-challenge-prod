@@ -45,6 +45,26 @@ export type NormalizedActivity = {
   raw: StravaActivity;
 };
 
+export type StravaSyncResult = {
+  userId: string;
+  athleteId?: number | null;
+  since: Date;
+  fetchedActivities: number;
+  processedActivities: number;
+  matchedActivities: number;
+  progressUpdates: number;
+  sampleActivities: Array<{
+    id: number;
+    name: string;
+    type?: string;
+    occurred_at: string;
+    distance?: number;
+    moving_time?: number;
+    steps?: number;
+  }>;
+  lastSyncedAt: string;
+};
+
 const STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities";
 const INGESTION_LOOKBACK_DAYS = 30;
 
