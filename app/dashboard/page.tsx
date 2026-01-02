@@ -23,6 +23,7 @@ interface Challenge {
   metric_type: ChallengeMetricType;
   target_value: number | null;
   target_unit: string | null;
+  progress_unit?: string | null;
   activity_types: string[] | null;
 }
 
@@ -466,6 +467,7 @@ export default function DashboardPage() {
               ? parsedTargetValue
               : null,
         target_unit: challenge.target_unit ?? null,
+        progress_unit: challenge.progress_unit ?? null,
         activity_types: challenge.activity_types ?? [],
       };
     });
