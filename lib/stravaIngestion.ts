@@ -158,6 +158,7 @@ export function selectMetricValue(activity: NormalizedActivity, metricType: stri
     case "distance":
       return activity.metrics.distance;
     case "moving_time":
+    case "duration":
       return activity.metrics.moving_time;
     case "elevation":
       return activity.metrics.elevation;
