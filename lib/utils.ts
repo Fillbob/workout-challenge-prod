@@ -10,10 +10,7 @@ export const hasEnvVars =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export function getSiteUrl() {
-  const url =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    process.env.VERCEL_URL;
+  const url = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL;
 
   if (url) {
     return url.startsWith("http") ? url : `https://${url}`;
