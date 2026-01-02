@@ -32,6 +32,13 @@ interface Submission {
   user_id: string;
   completed: boolean;
   completed_at: string | null;
+  progress_percent?: number | null;
+  progress_value?: number | null;
+  progress_target?: number | null;
+  progress_unit?: string | null;
+  progress_source?: string | null;
+  auto_completed?: boolean | null;
+  progress_updated_at?: string | null;
 }
 
 interface RecentSubmission {
@@ -66,8 +73,8 @@ interface WeeklyPoints {
 }
 
 type StravaStatus =
-  | { status: "disconnected"; lastError: string | null }
-  | { status: "connected"; athleteId: number | null; expiresAt: string | null; lastError: string | null };
+  | { status: "disconnected"; lastError: string | null; lastSyncedAt?: string | null }
+  | { status: "connected"; athleteId: number | null; expiresAt: string | null; lastError: string | null; lastSyncedAt?: string | null };
 
 interface TeamMessage {
   id: string;
@@ -100,6 +107,12 @@ const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
   daysUntilClose: null,
 };
 const STRAVA_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const STRAVA_SYNC_ENDPOINT = "/api/strava/ingest";
+
+function clampPercent(value: number | null) {
+  if (value === null || Number.isNaN(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
 
 function parseDateSafe(value: string | null): Date | null {
   if (!value) return null;
@@ -334,7 +347,11 @@ export default function DashboardPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [lastSeenMessageIds, setLastSeenMessageIds] = useState<Record<string, string | null>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [stravaStatus, setStravaStatus] = useState<StravaStatus>({ status: "disconnected", lastError: null });
+  const [stravaStatus, setStravaStatus] = useState<StravaStatus>({
+    status: "disconnected",
+    lastError: null,
+    lastSyncedAt: null,
+  });
   const [stravaMessage, setStravaMessage] = useState<string | null>(null);
   const [stravaLoading, setStravaLoading] = useState(false);
   const [hasReadQueryParams, setHasReadQueryParams] = useState(false);
@@ -459,7 +476,7 @@ export default function DashboardPage() {
     async (id: string) => {
       const { data, error } = await supabase
         .from("submissions")
-        .select("id, challenge_id, completed, completed_at, user_id")
+        .select("*")
         .eq("user_id", id);
       if (error) {
         setSaveStatus({ message: error.message, tone: "error" });
@@ -515,7 +532,7 @@ export default function DashboardPage() {
     try {
       const { data, error } = await supabase
         .from("strava_connections")
-        .select("athlete_id, expires_at, last_error")
+        .select("athlete_id, expires_at, last_error, updated_at")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -524,7 +541,7 @@ export default function DashboardPage() {
       }
 
       if (!data) {
-        setStravaStatus({ status: "disconnected", lastError: null });
+        setStravaStatus({ status: "disconnected", lastError: null, lastSyncedAt: null });
         return;
       }
 
@@ -533,10 +550,11 @@ export default function DashboardPage() {
         athleteId: data.athlete_id ?? null,
         expiresAt: data.expires_at,
         lastError: data.last_error ?? null,
+        lastSyncedAt: (data as { last_synced_at?: string | null; updated_at?: string | null })?.last_synced_at ?? data.updated_at ?? null,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to load Strava connection";
-      setStravaStatus({ status: "disconnected", lastError: message });
+      setStravaStatus({ status: "disconnected", lastError: message, lastSyncedAt: null });
     } finally {
       setStravaLoading(false);
     }
@@ -557,14 +575,19 @@ export default function DashboardPage() {
         }
 
         if (payload.status === "disconnected") {
-          setStravaStatus({ status: "disconnected", lastError: payload.last_error ?? null });
+          setStravaStatus((previous) => ({
+            status: "disconnected",
+            lastError: payload.last_error ?? null,
+            lastSyncedAt: previous.lastSyncedAt ?? null,
+          }));
         } else {
-          setStravaStatus({
+          setStravaStatus((previous) => ({
             status: "connected",
             athleteId: payload.athlete_id ?? null,
             expiresAt: payload.expires_at ?? null,
             lastError: payload.last_error ?? null,
-          });
+            lastSyncedAt: payload.last_synced_at ?? previous.lastSyncedAt ?? null,
+          }));
         }
 
         if (showMessage) {
@@ -572,7 +595,7 @@ export default function DashboardPage() {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to refresh Strava connection";
-        setStravaStatus({ status: "disconnected", lastError: message });
+        setStravaStatus((previous) => ({ status: "disconnected", lastError: message, lastSyncedAt: previous.lastSyncedAt ?? null }));
         setStravaMessage(message);
       } finally {
         if (showLoader) {
@@ -591,16 +614,50 @@ export default function DashboardPage() {
       if (!response.ok) {
         throw new Error(payload.error || "Unable to disconnect Strava");
       }
-      setStravaStatus({ status: "disconnected", lastError: null });
+      setStravaStatus({ status: "disconnected", lastError: null, lastSyncedAt: null });
       setStravaMessage("Strava disconnected");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to disconnect Strava";
-      setStravaStatus({ status: "disconnected", lastError: message });
+      setStravaStatus({ status: "disconnected", lastError: message, lastSyncedAt: null });
       setStravaMessage(message);
     } finally {
       setStravaLoading(false);
     }
   }, []);
+
+  const handleStravaSync = useCallback(async () => {
+    setStravaLoading(true);
+    try {
+      const response = await fetch(STRAVA_SYNC_ENDPOINT, { method: "POST" });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to sync Strava data");
+      }
+
+      setStravaMessage(payload.message ?? "Strava sync started");
+      if (payload.last_synced_at) {
+        setStravaStatus((previous) => ({
+          ...(previous.status === "connected"
+            ? previous
+            : { status: "disconnected", lastError: null, lastSyncedAt: null }),
+          lastSyncedAt: payload.last_synced_at ?? previous.lastSyncedAt ?? null,
+        }));
+      } else {
+        loadStravaStatus();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to sync Strava data";
+      setStravaMessage(message);
+      setStravaStatus((previous) =>
+        previous.status === "connected"
+          ? { ...previous, lastError: message }
+          : { status: "disconnected", lastError: message, lastSyncedAt: previous.lastSyncedAt ?? null },
+      );
+    } finally {
+      setStravaLoading(false);
+    }
+  }, [loadStravaStatus]);
 
   const startStravaAuth = useCallback(() => {
     setStravaMessage(null);
@@ -682,7 +739,7 @@ export default function DashboardPage() {
     }
 
     if (stravaParam === "error") {
-      setStravaStatus({ status: "disconnected", lastError: stravaError ?? null });
+      setStravaStatus({ status: "disconnected", lastError: stravaError ?? null, lastSyncedAt: null });
       setStravaMessage(stravaError || "Unable to connect to Strava");
     }
   }, [loadStravaStatus, refreshStravaConnection, searchParams]);
@@ -976,13 +1033,51 @@ export default function DashboardPage() {
     return { openChallenges: open, closedChallenges: closed };
   }, [currentTime, visibleChallenges]);
 
+  const challengeProgress = useMemo(() => {
+    const map: Record<
+      string,
+      { percent: number; label: string | null; source: string | null; updatedAt: string | null; hasData: boolean; autoCompleted: boolean }
+    > = {};
+
+    challenges.forEach((challenge) => {
+      const submission = submissions[challenge.id];
+      const source = submission?.progress_source ?? null;
+      const rawPercent = typeof submission?.progress_percent === "number" ? submission.progress_percent : null;
+      const value = typeof submission?.progress_value === "number" ? submission.progress_value : null;
+      const target =
+        typeof submission?.progress_target === "number"
+          ? submission.progress_target
+          : typeof challenge.target_value === "number"
+            ? challenge.target_value
+            : null;
+      const unit = submission?.progress_unit ?? challenge.progress_unit ?? null;
+      const hasTarget = typeof target === "number" && target > 0;
+      const derivedPercent = rawPercent ?? (hasTarget && typeof value === "number" ? (value / target) * 100 : null);
+      const percent = clampPercent(derivedPercent ?? (submission?.completed ? 100 : 0));
+      const hasData = rawPercent !== null || (hasTarget && typeof value === "number");
+      const label =
+        value !== null
+          ? `${value.toLocaleString()}${unit ? ` ${unit}` : ""}${
+              hasTarget ? ` of ${target?.toLocaleString()}${unit ? ` ${unit}` : ""}` : ""
+            }`
+          : null;
+      const updatedAt = submission?.progress_updated_at ?? submission?.completed_at ?? null;
+      const autoCompleted = Boolean(submission?.auto_completed || (source === "strava" && percent >= 100 && hasData));
+
+      map[challenge.id] = { percent, label, source, updatedAt, hasData, autoCompleted };
+    });
+
+    return map;
+  }, [challenges, submissions]);
+
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
     visibleChallenges.forEach((c) => {
-      map[c.id] = submissions[c.id]?.completed ?? false;
+      const derivedProgress = challengeProgress[c.id]?.percent ?? 0;
+      map[c.id] = submissions[c.id]?.completed ?? derivedProgress >= 100;
     });
     return map;
-  }, [submissions, visibleChallenges]);
+  }, [challengeProgress, submissions, visibleChallenges]);
 
   const totalPoints = useMemo(() => {
     return visibleChallenges.reduce((sum, challenge) => {
@@ -1003,6 +1098,26 @@ export default function DashboardPage() {
       .sort((a, b) => a.week - b.week);
   }, [submissionState, visibleChallenges]);
 
+  const formatTimestamp = (value: string | null) => {
+    if (!value) return "";
+    return new Date(value).toLocaleString();
+  };
+
+  const formatRelativeTime = (value: string | null | undefined) => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const diffMs = Date.now() - date.getTime();
+    const minutes = Math.round(diffMs / 60000);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  };
+
   const stravaConnectionInfo = useMemo(() => {
     if (stravaStatus.status !== "connected") {
       return {
@@ -1010,6 +1125,7 @@ export default function DashboardPage() {
         expiryLabel: null,
         athleteId: null,
         lastError: stravaStatus.lastError,
+        lastSyncedLabel: formatRelativeTime(stravaStatus.lastSyncedAt),
       };
     }
 
@@ -1023,6 +1139,7 @@ export default function DashboardPage() {
       expiryLabel,
       athleteId: stravaStatus.athleteId ?? null,
       lastError: stravaStatus.lastError,
+      lastSyncedLabel: formatRelativeTime(stravaStatus.lastSyncedAt),
     };
   }, [stravaStatus]);
 
@@ -1147,11 +1264,6 @@ export default function DashboardPage() {
     if (!activeTeamId) return;
     loadRecentActivity(activeTeamId, true);
   }, [activeTeamId, loadRecentActivity]);
-
-  const formatTimestamp = (value: string | null) => {
-    if (!value) return "";
-    return new Date(value).toLocaleString();
-  };
 
   const nextClosing = useMemo(() => {
     if (!currentTime) return null;
@@ -1353,6 +1465,9 @@ export default function DashboardPage() {
                           : "Ready to sync activities"
                         : stravaConnectionInfo.lastError || "Link Strava to read activities"}
                     </span>
+                    <span className="text-[11px] text-slate-500">
+                      Last sync: {stravaConnectionInfo.lastSyncedLabel || "Not synced yet"}
+                    </span>
                   </div>
                   {stravaConnectionInfo.connected && stravaConnectionInfo.athleteId && (
                     <span className="rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">
@@ -1385,6 +1500,17 @@ export default function DashboardPage() {
                       disabled={stravaLoading || !stravaConnectionInfo.connected}
                     >
                       Refresh
+                    </button>
+                    <button
+                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 ${
+                        stravaLoading || !stravaConnectionInfo.connected
+                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                          : "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                      }`}
+                      onClick={handleStravaSync}
+                      disabled={stravaLoading || !stravaConnectionInfo.connected}
+                    >
+                      Sync now
                     </button>
                   </div>
                 </div>
@@ -1425,10 +1551,14 @@ export default function DashboardPage() {
               )}
               {openChallenges.map((challenge) => {
                 const checked = submissionState[challenge.id] || false;
+                const progressInfo = challengeProgress[challenge.id];
+                const progressPercent = clampPercent(progressInfo?.percent ?? (checked ? 100 : 0));
                 const closingInfo = currentTime
                   ? getChallengeClosingInfo(challenge, currentTime)
                   : FALLBACK_CLOSING_INFO;
-                const toggleDisabled = !closingInfo.isEditable;
+                const autoLocked = Boolean(progressInfo?.autoCompleted && progressInfo.source === "strava");
+                const toggleDisabled = !closingInfo.isEditable || autoLocked;
+                const progressUpdatedLabel = formatRelativeTime(progressInfo?.updatedAt);
                 const statusDetail = closingInfo.isUpcoming
                   ? closingInfo.startDateLabel
                     ? `Opens ${closingInfo.startDateLabel}. You can mark completion after it begins.`
@@ -1494,6 +1624,47 @@ export default function DashboardPage() {
                         {closingInfo.closingLabel}
                       </span>
                         <span className="text-slate-500">{statusDetail}</span>
+                        {autoLocked && (
+                          <span className="rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700">Auto-completed from Strava</span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-slate-600">
+                          <span className="font-semibold text-slate-700">Progress</span>
+                          <span className="font-semibold text-slate-900">{progressPercent}%</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-white/70 shadow-inner shadow-orange-100">
+                          <div
+                            className="h-2 rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-sky-400 transition-all"
+                            style={{ width: `${progressPercent}%` }}
+                            aria-label={`Progress for ${challenge.title}`}
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                          {progressInfo?.label && (
+                            <span className="rounded-full bg-white/80 px-2 py-1 font-semibold text-slate-700">
+                              {progressInfo.label}
+                            </span>
+                          )}
+                          {progressInfo?.source === "strava" && (
+                            <span className="rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700">
+                              Strava {progressUpdatedLabel ? `· Updated ${progressUpdatedLabel}` : "activity"}
+                            </span>
+                          )}
+                          {!progressInfo?.source && (
+                            <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
+                              Manual tracking
+                            </span>
+                          )}
+                          {!progressInfo?.hasData && progressInfo?.source === "strava" && (
+                            <span className="text-xs text-slate-500">
+                              No Strava data yet. Try &quot;Sync now&quot; or connect Strava to keep this challenge updated.
+                            </span>
+                          )}
+                          {!progressInfo?.hasData && !progressInfo?.source && (
+                            <span className="text-xs text-slate-500">No tracker data yet—update progress manually.</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
