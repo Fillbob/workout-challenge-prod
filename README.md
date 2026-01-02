@@ -76,16 +76,19 @@ If you wish to just develop locally and not deploy to Vercel, [follow the steps 
 4. Rename `.env.example` to `.env.local` and update the following:
 
   ```env
+  SITE_URL=https://workout-challenge-prod.vercel.app
   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
   STRAVA_CLIENT_ID=[STRAVA APPLICATION CLIENT ID]
   STRAVA_CLIENT_SECRET=[STRAVA APPLICATION CLIENT SECRET]
-  STRAVA_REDIRECT_URI=[OPTIONAL FULL STRAVA REDIRECT URI, DEFAULTS TO <SITE_URL>/api/strava/redirect]
+  STRAVA_REDIRECT_URI=https://workout-challenge-prod.vercel.app/api/strava/redirect
   ```
   > [!NOTE]
   > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.
   > Both legacy **anon** keys and new **publishable** keys can be used with this variable name during the transition period. Supabase's dashboard may show `NEXT_PUBLIC_SUPABASE_ANON_KEY`; its value can be used in this example.
   > See the [full announcement](https://github.com/orgs/supabase/discussions/29260) for more information.
+
+  Strava requires the redirect URI to exactly match the URL registered in your Strava application. Use the stable production domain rather than ephemeral preview URLs to avoid invalid redirect errors.
 
   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
 

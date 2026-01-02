@@ -15,7 +15,7 @@ export async function POST() {
   }
 
   const { data: tokenRow, error: tokenError } = await supabase
-    .from("strava_tokens")
+    .from("strava_connections")
     .select("access_token, refresh_token, expires_at, athlete_id, last_error")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -46,7 +46,7 @@ export async function POST() {
     const expiresAtIso = new Date(refreshed.expires_at * 1000).toISOString();
 
     const { error: updateError } = await supabase
-      .from("strava_tokens")
+      .from("strava_connections")
       .update({
         access_token: refreshed.access_token,
         refresh_token: refreshed.refresh_token,
@@ -72,7 +72,7 @@ export async function POST() {
     const message = error instanceof Error ? error.message : "Unable to refresh Strava tokens";
 
     await supabase
-      .from("strava_tokens")
+      .from("strava_connections")
       .update({ last_error: message, updated_at: new Date().toISOString() })
       .eq("user_id", user.id);
 

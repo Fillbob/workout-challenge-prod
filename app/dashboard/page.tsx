@@ -498,7 +498,7 @@ export default function DashboardPage() {
 
     try {
       const { data, error } = await supabase
-        .from("strava_tokens")
+        .from("strava_connections")
         .select("athlete_id, expires_at, last_error")
         .eq("user_id", userId)
         .maybeSingle();

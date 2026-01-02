@@ -12,7 +12,7 @@ export async function POST() {
   }
 
   const { data: tokenRow, error: tokenError } = await supabase
-    .from("strava_tokens")
+    .from("strava_connections")
     .select("access_token")
     .eq("user_id", user.id)
     .maybeSingle();
@@ -33,7 +33,7 @@ export async function POST() {
   }
 
   const { error: deleteError } = await supabase
-    .from("strava_tokens")
+    .from("strava_connections")
     .delete()
     .eq("user_id", user.id);
 
