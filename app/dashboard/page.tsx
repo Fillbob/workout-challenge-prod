@@ -143,6 +143,23 @@ function parseDateSafe(value: string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function convertDistanceToMiles(value: number | null, unit: string | null) {
+  if (value === null || Number.isNaN(value)) return value;
+
+  const normalizedUnit = unit?.toLowerCase().trim();
+  if (!normalizedUnit) return value;
+
+  if (normalizedUnit.includes("meter")) {
+    return value / 1609.34;
+  }
+
+  if (normalizedUnit.includes("kilometer") || normalizedUnit.includes("km")) {
+    return value * 0.621371;
+  }
+
+  return value;
+}
+
 function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -756,8 +773,9 @@ export default function DashboardPage() {
         loadStravaStatus();
       }
       if (userId) {
-        loadSubmissionProgress(userId);
+        await loadSubmissionProgress(userId);
       }
+      window.location.reload();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to sync Strava data";
       setStravaMessage(message);
@@ -1212,17 +1230,11 @@ export default function DashboardPage() {
       const derivedPercent = rawPercent ?? (hasTarget && typeof value === "number" ? (value / target) * 100 : null);
       const percent = clampPercent(derivedPercent ?? (submission?.completed ? 100 : 0));
       const hasData = rawPercent !== null || windowedEntries.length > 0 || (hasTarget && typeof value === "number");
-      const label =
-        value !== null
-          ? `${value.toLocaleString()}${unit ? ` ${unit}` : ""}${
-              hasTarget ? ` of ${target?.toLocaleString()}${unit ? ` ${unit}` : ""}` : ""
-            }`
-          : null;
-      const updatedAt =
-        latestEntryDate?.toISOString() ?? submission?.progress_updated_at ?? submission?.completed_at ?? null;
-      const autoCompleted = Boolean(submission?.auto_completed || (source === "strava" && percent >= 100 && hasData));
+      let displayUnit = unit;
+      let displayValue = value;
+      let displayTarget = target;
 
-      const entries = windowedEntries.map((entry, index) => {
+      let entries = windowedEntries.map((entry, index) => {
         const activity = entry.activity_id ? activityDetails[entry.activity_id] : undefined;
         const occurredAt =
           activity?.start_date_local ??
@@ -1242,6 +1254,27 @@ export default function DashboardPage() {
           name: activity?.name ?? null,
         };
       });
+
+      if (challenge.metric_type === "distance" && unit) {
+        displayUnit = "miles";
+        displayValue = convertDistanceToMiles(displayValue, unit);
+        displayTarget = convertDistanceToMiles(displayTarget, unit);
+        entries = entries.map((entry) => ({
+          ...entry,
+          value: convertDistanceToMiles(entry.value, unit),
+          unit: "miles",
+        }));
+      }
+
+      const label =
+        displayValue !== null
+          ? `${displayValue.toLocaleString()}${displayUnit ? ` ${displayUnit}` : ""}${
+              hasTarget ? ` of ${displayTarget?.toLocaleString()}${displayUnit ? ` ${displayUnit}` : ""}` : ""
+            }`
+          : null;
+      const updatedAt =
+        latestEntryDate?.toISOString() ?? submission?.progress_updated_at ?? submission?.completed_at ?? null;
+      const autoCompleted = Boolean(submission?.auto_completed || (source === "strava" && percent >= 100 && hasData));
 
       map[challenge.id] = { percent, label, source, updatedAt, hasData, autoCompleted, entries };
     });
