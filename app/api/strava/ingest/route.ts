@@ -8,6 +8,8 @@ import {
   selectMetricValue,
   type ChallengeRow,
   type StravaConnection,
+  type StravaSyncResult,
+  type SyncContext,
 } from "@/lib/stravaIngestion";
 import { getServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -28,6 +30,46 @@ async function authorizeWithSecret(request: Request, athleteId: number | null) {
   }
 
   return false;
+}
+
+function extractErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return "Unknown error";
+}
+
+function isMissingTableError(error: unknown, table: string) {
+  const message = extractErrorMessage(error).toLowerCase();
+  const normalizedTable = `public.${table}`.toLowerCase();
+  return message.includes(normalizedTable) || message.includes(`missing ${table.toLowerCase()} table`);
+}
+
+function normalizeSchemaError(error: unknown, context: string, syncContext?: SyncContext) {
+  const message = extractErrorMessage(error);
+
+  const registerMissingTable = (table: string) => {
+    syncContext?.missingTables.add(table);
+  };
+
+  if (message.includes("public.submission_progress")) {
+    registerMissingTable("submission_progress");
+    return `${context}: missing submission_progress table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  if (message.includes("public.strava_activity_ingestions")) {
+    registerMissingTable("strava_activity_ingestions");
+    return `${context}: missing strava_activity_ingestions table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  if (message.includes("public.strava_sync_logs")) {
+    registerMissingTable("strava_sync_logs");
+    return `${context}: missing strava_sync_logs table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  return `${context}: ${message}`;
 }
 
 async function loadConnections(athleteId?: number | null) {
@@ -56,14 +98,22 @@ async function loadUserConnections(userId: string) {
   return data ?? [];
 }
 
-async function loadExistingProgress(userId: string, challengeIds: string[]) {
+async function loadExistingProgress(syncContext: SyncContext, userId: string, challengeIds: string[]) {
   const admin = getServiceRoleClient();
   const { data, error } = await admin
     .from("submission_progress")
     .select("challenge_id, progress_value")
     .eq("user_id", userId)
     .in("challenge_id", challengeIds);
-  if (error) throw error;
+
+  if (error) {
+    if (isMissingTableError(error, "submission_progress")) {
+      console.warn("Submission progress table missing; proceeding without historical totals");
+      syncContext.missingTables.add("submission_progress");
+      return new Map<string, number>();
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to load submission progress", syncContext));
+  }
   const totals = new Map<string, number>();
   (data ?? []).forEach((row) => {
     const current = totals.get(row.challenge_id) ?? 0;
@@ -90,24 +140,41 @@ async function loadExistingCompletion(userId: string, challengeIds: string[]) {
   return completion;
 }
 
-async function markActivityProcessed(userId: string, activityId: number, raw_payload: unknown) {
+async function markActivityProcessed(syncContext: SyncContext, userId: string, activityId: number, raw_payload: unknown) {
   const admin = getServiceRoleClient();
-  await admin
+  const { error } = await admin
     .from("strava_activity_ingestions")
     .insert({ user_id: userId, activity_id: activityId, raw_payload });
+
+  if (error) {
+    if (isMissingTableError(error, "strava_activity_ingestions")) {
+      console.warn("Strava ingestion table missing; skipping ingestion record");
+      syncContext.missingTables.add("strava_activity_ingestions");
+      return;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to record ingestion", syncContext));
+  }
 }
 
-async function wasActivityProcessed(activityId: number) {
+async function wasActivityProcessed(syncContext: SyncContext, activityId: number) {
   const admin = getServiceRoleClient();
   const { count, error } = await admin
     .from("strava_activity_ingestions")
     .select("id", { count: "exact", head: true })
     .eq("activity_id", activityId);
-  if (error) throw error;
+  if (error) {
+    if (isMissingTableError(error, "strava_activity_ingestions")) {
+      console.warn("Strava ingestion table missing; treating activities as unprocessed");
+      syncContext.missingTables.add("strava_activity_ingestions");
+      return false;
+    }
+    throw error;
+  }
   return (count ?? 0) > 0;
 }
 
 async function upsertSubmissionProgress(
+  syncContext: SyncContext,
   userId: string,
   challengeId: string,
   activityId: number,
@@ -117,7 +184,7 @@ async function upsertSubmissionProgress(
   completedAt: string | null,
 ) {
   const admin = getServiceRoleClient();
-  await admin
+  const { error } = await admin
     .from("submission_progress")
     .upsert(
       {
@@ -131,6 +198,16 @@ async function upsertSubmissionProgress(
       },
       { onConflict: "challenge_id,user_id,activity_id" },
     );
+
+  if (error) {
+    if (isMissingTableError(error, "submission_progress")) {
+      console.warn("Submission progress table missing; skipping progress upsert");
+      syncContext.missingTables.add("submission_progress");
+      return false;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to upsert submission progress", syncContext));
+  }
+  return true;
 }
 
 async function upsertSubmission(userId: string, challengeId: string, completed: boolean, completedAt: string | null) {
@@ -148,10 +225,53 @@ async function upsertSubmission(userId: string, challengeId: string, completed: 
     );
 }
 
-async function syncConnection(connection: StravaConnection, challenges: ChallengeRow[]) {
+async function recordSyncLog({
+  connection,
+  result,
+  startedAt,
+  finishedAt,
+  status,
+  error,
+}: {
+  connection: StravaConnection;
+  result?: StravaSyncResult;
+  startedAt: Date;
+  finishedAt: Date;
+  status: "success" | "error";
+  error?: string | null;
+}) {
+  const admin = getServiceRoleClient();
+  const { error: logError } = await admin.from("strava_sync_logs").insert({
+    user_id: result?.userId ?? connection.user_id,
+    athlete_id: result?.athleteId ?? connection.athlete_id ?? null,
+    started_at: startedAt.toISOString(),
+    finished_at: finishedAt.toISOString(),
+    since: result?.since?.toISOString() ?? null,
+    fetched_activities: result?.fetchedActivities ?? null,
+    processed_activities: result?.processedActivities ?? null,
+    matched_activities: result?.matchedActivities ?? null,
+    progress_updates: result?.progressUpdates ?? null,
+    sample_activities: result?.sampleActivities ?? null,
+    warnings: result?.missingTables ? Array.from(result.missingTables) : null,
+    status,
+    error: error ?? null,
+  });
+
+  if (logError) {
+    console.error("Failed to persist Strava sync log", {
+      message: logError.message,
+      details: logError.details,
+      hint: logError.hint,
+      code: logError.code,
+    });
+  }
+}
+
+async function syncConnection(connection: StravaConnection, challenges: ChallengeRow[]): Promise<StravaSyncResult> {
   const admin = getServiceRoleClient();
   const refreshed = await refreshConnectionIfNeeded(connection);
   const allowedTeamIds = await fetchTeamIdsForUser(refreshed.user_id);
+  const syncContext: SyncContext = { missingTables: new Set<string>() };
 
   const permittedChallenges = challenges.filter((challenge) => {
     if (challenge.team_ids && challenge.team_ids.length > 0) {
@@ -161,15 +281,30 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   });
 
   const challengeIds = permittedChallenges.map((challenge) => challenge.id);
-  const existingProgressTotals = await loadExistingProgress(refreshed.user_id, challengeIds);
+  const existingProgressTotals = await loadExistingProgress(syncContext, refreshed.user_id, challengeIds);
   const existingSubmissions = await loadExistingCompletion(refreshed.user_id, challengeIds);
 
   const since = getDefaultSinceDate(refreshed.last_synced_at);
   const activities = await fetchRecentActivities(refreshed, since);
   const newProgress: Map<string, number> = new Map();
+  let processedActivities = 0;
+  let matchedActivities = 0;
+  let progressUpdates = 0;
+
+  const sampleActivities = activities.slice(0, 5).map((activity) => ({
+    id: activity.id,
+    name: activity.raw.name,
+    type: activity.raw.type,
+    occurred_at: activity.occurred_at.toISOString(),
+    distance: activity.metrics.distance,
+    moving_time: activity.metrics.moving_time,
+    steps: activity.metrics.steps,
+  }));
 
   for (const activity of activities) {
-    if (await wasActivityProcessed(activity.id)) continue;
+    if (await wasActivityProcessed(syncContext, activity.id)) continue;
+    processedActivities += 1;
+    let matchedThisActivity = false;
 
     for (const challenge of permittedChallenges) {
       if (!challenge.metric_type || !challenge.target_value) continue;
@@ -177,7 +312,8 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
       const metricValue = selectMetricValue(activity, challenge.metric_type!);
       if (typeof metricValue !== "number") continue;
 
-      await upsertSubmissionProgress(
+      const progressRecorded = await upsertSubmissionProgress(
+        syncContext,
         refreshed.user_id,
         challenge.id,
         activity.id,
@@ -187,11 +323,16 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
         null,
       );
 
-      const current = newProgress.get(challenge.id) ?? 0;
-      newProgress.set(challenge.id, current + metricValue);
+      if (progressRecorded) {
+        const current = newProgress.get(challenge.id) ?? 0;
+        newProgress.set(challenge.id, current + metricValue);
+        matchedThisActivity = true;
+        progressUpdates += 1;
+      }
     }
 
-    await markActivityProcessed(refreshed.user_id, activity.id, activity.raw);
+    if (matchedThisActivity) matchedActivities += 1;
+    await markActivityProcessed(syncContext, refreshed.user_id, activity.id, activity.raw);
   }
 
   for (const challenge of permittedChallenges) {
@@ -204,10 +345,25 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     await upsertSubmission(refreshed.user_id, challenge.id, completed || existing?.completed === true, completedAt);
   }
 
+  const lastSyncedAt = new Date().toISOString();
+
   await admin
     .from("strava_connections")
-    .update({ last_synced_at: new Date().toISOString(), last_error: null })
+    .update({ last_synced_at: lastSyncedAt, last_error: null })
     .eq("user_id", refreshed.user_id);
+
+  return {
+    userId: refreshed.user_id,
+    athleteId: refreshed.athlete_id ?? null,
+    since,
+    fetchedActivities: activities.length,
+    processedActivities,
+    matchedActivities,
+    progressUpdates,
+    missingTables: syncContext.missingTables.size > 0 ? Array.from(syncContext.missingTables) : undefined,
+    sampleActivities,
+    lastSyncedAt,
+  } satisfies StravaSyncResult;
 }
 
 export async function GET(request: Request) {
@@ -233,6 +389,8 @@ export async function POST(request: Request) {
     }
 
     let connections: StravaConnection[];
+    const results: StravaSyncResult[] = [];
+    let latestSyncedAt: string | null = null;
     if (isSecretAuthorized) {
       connections = await loadConnections(athleteId);
     } else {
@@ -251,19 +409,41 @@ export async function POST(request: Request) {
       }
     }
     for (const connection of connections) {
+      const startedAt = new Date();
       try {
-        await syncConnection(connection, challenges);
+        const result = await syncConnection(connection, challenges);
+        results.push(result);
+        if (!latestSyncedAt) latestSyncedAt = result.lastSyncedAt;
+        await recordSyncLog({
+          connection,
+          result,
+          startedAt,
+          finishedAt: new Date(),
+          status: "success",
+        });
       } catch (error) {
         const admin = getServiceRoleClient();
-        const message = error instanceof Error ? error.message : "Unknown error";
+        const message = extractErrorMessage(error);
+        console.error("Strava sync failed", {
+          user_id: connection.user_id,
+          athlete_id: connection.athlete_id,
+          error: message,
+        });
         await admin
           .from("strava_connections")
           .update({ last_error: message, updated_at: new Date().toISOString() })
           .eq("user_id", connection.user_id);
+        await recordSyncLog({
+          connection,
+          startedAt,
+          finishedAt: new Date(),
+          status: "error",
+          error: message,
+        });
       }
     }
 
-    return NextResponse.json({ status: "processed", connections: connections.length });
+    return NextResponse.json({ status: "processed", connections: connections.length, last_synced_at: latestSyncedAt, results });
   } catch (error) {
     const message =
       error instanceof Error
