@@ -45,9 +45,22 @@ interface Submission {
 interface SubmissionProgressRow {
   challenge_id: string;
   progress_value: number | null;
+  activity_id: number | null;
+  target_value: number | null;
+  completed: boolean | null;
   created_at: string | null;
   updated_at: string | null;
   completed_at: string | null;
+}
+
+interface ActivityDetail {
+  activity_id: number;
+  type: string | null;
+  name: string | null;
+  distance: number | null;
+  moving_time: number | null;
+  start_date: string | null;
+  start_date_local: string | null;
 }
 
 interface RecentSubmission {
@@ -357,6 +370,7 @@ export default function DashboardPage() {
   const [lastSeenMessageIds, setLastSeenMessageIds] = useState<Record<string, string | null>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [progressEntries, setProgressEntries] = useState<SubmissionProgressRow[]>([]);
+  const [activityDetails, setActivityDetails] = useState<Record<number, ActivityDetail>>({});
   const [stravaStatus, setStravaStatus] = useState<StravaStatus>({
     status: "disconnected",
     lastError: null,
@@ -365,6 +379,7 @@ export default function DashboardPage() {
   const [stravaMessage, setStravaMessage] = useState<string | null>(null);
   const [stravaLoading, setStravaLoading] = useState(false);
   const [hasReadQueryParams, setHasReadQueryParams] = useState(false);
+  const [expandedChallenges, setExpandedChallenges] = useState<Set<string>>(new Set());
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -502,11 +517,54 @@ export default function DashboardPage() {
     [supabase],
   );
 
+  const loadActivityDetails = useCallback(
+    async (activityIds: number[], userId: string) => {
+      if (activityIds.length === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("strava_activity_ingestions")
+          .select("activity_id, raw_payload, processed_at")
+          .eq("user_id", userId)
+          .in("activity_id", activityIds);
+
+        if (error) {
+          console.warn("Unable to load activity details", error.message);
+          return;
+        }
+
+        const normalized: Record<number, ActivityDetail> = {};
+
+        (data ?? []).forEach((row) => {
+          const payload = ((row as { raw_payload?: unknown })?.raw_payload || {}) as Record<string, unknown>;
+          const detail: ActivityDetail = {
+            activity_id: Number(row.activity_id),
+            type: typeof payload.type === "string" ? payload.type : null,
+            name: typeof payload.name === "string" ? payload.name : null,
+            distance: typeof payload.distance === "number" ? payload.distance : null,
+            moving_time: typeof payload.moving_time === "number" ? payload.moving_time : null,
+            start_date: typeof payload.start_date === "string" ? payload.start_date : null,
+            start_date_local:
+              typeof payload.start_date_local === "string" ? payload.start_date_local : null,
+          };
+          normalized[detail.activity_id] = detail;
+        });
+
+        setActivityDetails((prev) => ({ ...prev, ...normalized }));
+      } catch (error) {
+        console.warn("Unable to parse activity details", error);
+      }
+    },
+    [supabase],
+  );
+
   const loadSubmissionProgress = useCallback(
     async (id: string) => {
       const { data, error } = await supabase
         .from("submission_progress")
-        .select("challenge_id, progress_value, created_at, updated_at, completed_at")
+        .select(
+          "challenge_id, progress_value, created_at, updated_at, completed_at, activity_id, target_value, completed",
+        )
         .eq("user_id", id);
 
       if (error) {
@@ -518,13 +576,28 @@ export default function DashboardPage() {
         (data ?? []).map((row) => ({
           challenge_id: String(row.challenge_id),
           progress_value: row.progress_value === null ? null : Number(row.progress_value),
+          activity_id: typeof row.activity_id === "number" ? row.activity_id : null,
+          target_value: row.target_value === null ? null : Number(row.target_value),
+          completed: typeof row.completed === "boolean" ? row.completed : null,
           created_at: row.created_at ?? null,
           updated_at: row.updated_at ?? null,
           completed_at: row.completed_at ?? null,
         })),
       );
+
+      const activityIds = Array.from(
+        new Set(
+          (data ?? [])
+            .map((row) => row.activity_id)
+            .filter((id): id is number => typeof id === "number" && Number.isFinite(id)),
+        ),
+      );
+
+      if (activityIds.length > 0) {
+        loadActivityDetails(activityIds, id);
+      }
     },
-    [supabase],
+    [loadActivityDetails, supabase],
   );
 
   const loadAnnouncements = useCallback(async () => {
@@ -1077,7 +1150,23 @@ export default function DashboardPage() {
   const challengeProgress = useMemo(() => {
     const map: Record<
       string,
-      { percent: number; label: string | null; source: string | null; updatedAt: string | null; hasData: boolean; autoCompleted: boolean }
+      {
+        percent: number;
+        label: string | null;
+        source: string | null;
+        updatedAt: string | null;
+        hasData: boolean;
+        autoCompleted: boolean;
+        entries: Array<{
+          id: string;
+          value: number | null;
+          unit: string | null;
+          occurredAt: string | null;
+          activityType: string | null;
+          movingTime: number | null;
+          name: string | null;
+        }>;
+      }
     > = {};
 
     challenges.forEach((challenge) => {
@@ -1094,6 +1183,8 @@ export default function DashboardPage() {
         if (endBoundary && timestamp >= endBoundary) return false;
         return true;
       });
+      const unit =
+        submission?.progress_unit ?? challenge.progress_unit ?? challenge.target_unit ?? null;
       const aggregatedValue =
         windowedEntries.length > 0
           ? windowedEntries.reduce((total, entry) => total + Number(entry.progress_value ?? 0), 0)
@@ -1117,7 +1208,6 @@ export default function DashboardPage() {
           : typeof challenge.target_value === "number"
             ? challenge.target_value
             : null;
-      const unit = submission?.progress_unit ?? challenge.progress_unit ?? null;
       const hasTarget = typeof target === "number" && target > 0;
       const derivedPercent = rawPercent ?? (hasTarget && typeof value === "number" ? (value / target) * 100 : null);
       const percent = clampPercent(derivedPercent ?? (submission?.completed ? 100 : 0));
@@ -1132,11 +1222,32 @@ export default function DashboardPage() {
         latestEntryDate?.toISOString() ?? submission?.progress_updated_at ?? submission?.completed_at ?? null;
       const autoCompleted = Boolean(submission?.auto_completed || (source === "strava" && percent >= 100 && hasData));
 
-      map[challenge.id] = { percent, label, source, updatedAt, hasData, autoCompleted };
+      const entries = windowedEntries.map((entry, index) => {
+        const activity = entry.activity_id ? activityDetails[entry.activity_id] : undefined;
+        const occurredAt =
+          activity?.start_date_local ??
+          activity?.start_date ??
+          entry.updated_at ??
+          entry.created_at ??
+          entry.completed_at ??
+          null;
+
+        return {
+          id: entry.activity_id ? String(entry.activity_id) : `${challenge.id}-entry-${index}`,
+          value: entry.progress_value,
+          unit,
+          occurredAt,
+          activityType: activity?.type ?? null,
+          movingTime: activity?.moving_time ?? null,
+          name: activity?.name ?? null,
+        };
+      });
+
+      map[challenge.id] = { percent, label, source, updatedAt, hasData, autoCompleted, entries };
     });
 
     return map;
-  }, [challenges, progressEntries, submissions]);
+  }, [activityDetails, challenges, progressEntries, submissions]);
 
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -1170,6 +1281,27 @@ export default function DashboardPage() {
     if (!value) return "";
     return new Date(value).toLocaleString();
   };
+
+  const formatDuration = (seconds: number | null | undefined) => {
+    if (!seconds || Number.isNaN(seconds)) return null;
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const parts = [hrs, mins, secs].map((unit) => String(unit).padStart(2, "0"));
+    return hrs > 0 ? parts.join(":") : parts.slice(1).join(":");
+  };
+
+  const toggleChallengeDetails = useCallback((challengeId: string) => {
+    setExpandedChallenges((prev) => {
+      const next = new Set(prev);
+      if (next.has(challengeId)) {
+        next.delete(challengeId);
+      } else {
+        next.add(challengeId);
+      }
+      return next;
+    });
+  }, []);
 
   const formatRelativeTime = (value: string | null | undefined) => {
     if (!value) return null;
@@ -1627,6 +1759,8 @@ export default function DashboardPage() {
                 const autoLocked = Boolean(progressInfo?.autoCompleted && progressInfo.source === "strava");
                 const toggleDisabled = !closingInfo.isEditable || autoLocked;
                 const progressUpdatedLabel = formatRelativeTime(progressInfo?.updatedAt);
+                const challengeEntries = progressInfo?.entries ?? [];
+                const isExpanded = expandedChallenges.has(challenge.id);
                 const statusDetail = closingInfo.isUpcoming
                   ? closingInfo.startDateLabel
                     ? `Opens ${closingInfo.startDateLabel}. You can mark completion after it begins.`
@@ -1731,6 +1865,70 @@ export default function DashboardPage() {
                           )}
                           {!progressInfo?.hasData && !progressInfo?.source && (
                             <span className="text-xs text-slate-500">No tracker data yet—update progress manually.</span>
+                          )}
+                        </div>
+                        <div className="rounded-xl border border-orange-100 bg-white/70 text-xs shadow-inner shadow-orange-100">
+                          <button
+                            type="button"
+                            onClick={() => toggleChallengeDetails(challenge.id)}
+                            className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left font-semibold text-slate-800 hover:bg-orange-50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-orange-600">▼</span>
+                              <span>Submissions counted</span>
+                              <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                {challengeEntries.length}
+                              </span>
+                            </div>
+                            <span
+                              aria-hidden
+                              className={`text-lg text-orange-600 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            >
+                              ▼
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="divide-y divide-orange-50">
+                              {challengeEntries.length === 0 ? (
+                                <p className="px-3 py-2 text-slate-600">No submissions counted yet.</p>
+                              ) : (
+                                <ul className="divide-y divide-orange-50">
+                                  {challengeEntries.map((entry) => {
+                                    const durationLabel = formatDuration(entry.movingTime);
+                                    const dateLabel = formatTimestamp(entry.occurredAt);
+                                    const valueLabel =
+                                      entry.value === null
+                                        ? "N/A"
+                                        : `${Number(entry.value).toLocaleString(undefined, {
+                                            maximumFractionDigits: 3,
+                                          })}${entry.unit ? ` ${entry.unit}` : ""}`;
+
+                                    return (
+                                      <li key={entry.id} className="px-3 py-2 text-slate-700">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="space-y-0.5">
+                                            <p className="text-sm font-semibold text-slate-900">
+                                              {entry.activityType || entry.name || "Submission"}
+                                            </p>
+                                            {entry.name && (
+                                              <p className="text-xs text-slate-600">{entry.name}</p>
+                                            )}
+                                            <p className="text-[11px] text-slate-500">{dateLabel || "Date unavailable"}</p>
+                                          </div>
+                                          <div className="text-right">
+                                            <p className="text-sm font-semibold text-slate-900">{valueLabel}</p>
+                                            {durationLabel && (
+                                              <p className="text-[11px] text-slate-600">Time: {durationLabel}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
