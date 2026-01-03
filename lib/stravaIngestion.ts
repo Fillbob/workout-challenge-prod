@@ -21,6 +21,7 @@ export type ChallengeRow = {
   hidden?: boolean | null;
   metric_type?: string | null;
   target_value?: number | null;
+  target_unit?: string | null;
   activity_types?: string[] | null;
 };
 
@@ -170,7 +171,7 @@ export function activityMatchesChallenge(
     if (!allowedTypes.includes(normalizedActivityType)) return false;
   }
 
-  const metricValue = selectMetricValue(activity, challenge.metric_type);
+  const metricValue = normalizeMetricValueForChallenge(activity, challenge);
   return typeof metricValue === "number" && Number.isFinite(metricValue) && metricValue > 0;
 }
 
@@ -190,12 +191,40 @@ export function selectMetricValue(activity: NormalizedActivity, metricType: stri
   }
 }
 
+export function normalizeMetricValueForChallenge(activity: NormalizedActivity, challenge: ChallengeRow) {
+  const rawMetricValue = selectMetricValue(activity, challenge.metric_type ?? "");
+  if (typeof rawMetricValue !== "number" || Number.isNaN(rawMetricValue)) return undefined;
+
+  if (challenge.metric_type === "distance") {
+    return normalizeDistanceValue(rawMetricValue, challenge.target_unit);
+  }
+
+  return rawMetricValue;
+}
+
+function normalizeDistanceValue(distance: number, targetUnit?: string | null) {
+  const unit = targetUnit?.toLowerCase().trim();
+
+  if (!unit) return distance;
+
+  if (unit.includes("mile")) {
+    // Strava distances are reported in meters; convert to miles when the challenge target expects miles.
+    return distance / 1609.34;
+  }
+
+  if (unit.includes("kilometer") || unit.includes("km")) {
+    return distance / 1000;
+  }
+
+  return distance;
+}
+
 export async function loadActiveChallenges() {
   const admin = getServiceRoleClient();
   const { data, error } = await admin
     .from("challenges")
     .select(
-      "id, start_date, end_date, team_ids, hidden, metric_type, target_value, activity_types",
+      "id, start_date, end_date, team_ids, hidden, metric_type, target_value, target_unit, activity_types",
     )
     .eq("hidden", false);
 

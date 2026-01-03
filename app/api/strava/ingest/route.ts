@@ -4,8 +4,8 @@ import {
   fetchTeamIdsForUser,
   getDefaultSinceDate,
   loadActiveChallenges,
+  normalizeMetricValueForChallenge,
   refreshConnectionIfNeeded,
-  selectMetricValue,
   type ChallengeRow,
   type StravaConnection,
   type StravaSyncResult,
@@ -309,7 +309,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     for (const challenge of permittedChallenges) {
       if (!challenge.metric_type || !challenge.target_value) continue;
       if (!activityMatchesChallenge(activity, challenge, allowedTeamIds)) continue;
-      const metricValue = selectMetricValue(activity, challenge.metric_type!);
+      const metricValue = normalizeMetricValueForChallenge(activity, challenge);
       if (typeof metricValue !== "number") continue;
 
       const progressRecorded = await upsertSubmissionProgress(
