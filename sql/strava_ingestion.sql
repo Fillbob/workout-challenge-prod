@@ -59,7 +59,8 @@ create table if not exists public.strava_sync_logs (
   progress_updates integer,
   status text not null default 'started',
   error text,
-  sample_activities jsonb
+  sample_activities jsonb,
+  warnings jsonb
 );
 
 -- Backfill compatible columns when the table already exists.
@@ -74,6 +75,7 @@ alter table if exists public.strava_sync_logs
   add column if not exists progress_updates integer,
   add column if not exists status text not null default 'started',
   add column if not exists error text,
-  add column if not exists sample_activities jsonb;
+  add column if not exists sample_activities jsonb,
+  add column if not exists warnings jsonb;
 
 create index if not exists strava_sync_logs_user_idx on public.strava_sync_logs(user_id, started_at desc);

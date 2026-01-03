@@ -9,6 +9,7 @@ import {
   type ChallengeRow,
   type StravaConnection,
   type StravaSyncResult,
+  type SyncContext,
 } from "@/lib/stravaIngestion";
 import { getServiceRoleClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -46,18 +47,25 @@ function isMissingTableError(error: unknown, table: string) {
   return message.includes(normalizedTable) || message.includes(`missing ${table.toLowerCase()} table`);
 }
 
-function normalizeSchemaError(error: unknown, context: string) {
+function normalizeSchemaError(error: unknown, context: string, syncContext?: SyncContext) {
   const message = extractErrorMessage(error);
 
+  const registerMissingTable = (table: string) => {
+    syncContext?.missingTables.add(table);
+  };
+
   if (message.includes("public.submission_progress")) {
+    registerMissingTable("submission_progress");
     return `${context}: missing submission_progress table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
   }
 
   if (message.includes("public.strava_activity_ingestions")) {
+    registerMissingTable("strava_activity_ingestions");
     return `${context}: missing strava_activity_ingestions table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
   }
 
   if (message.includes("public.strava_sync_logs")) {
+    registerMissingTable("strava_sync_logs");
     return `${context}: missing strava_sync_logs table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
   }
 
@@ -90,7 +98,7 @@ async function loadUserConnections(userId: string) {
   return data ?? [];
 }
 
-async function loadExistingProgress(userId: string, challengeIds: string[]) {
+async function loadExistingProgress(syncContext: SyncContext, userId: string, challengeIds: string[]) {
   const admin = getServiceRoleClient();
   const { data, error } = await admin
     .from("submission_progress")
@@ -101,9 +109,10 @@ async function loadExistingProgress(userId: string, challengeIds: string[]) {
   if (error) {
     if (isMissingTableError(error, "submission_progress")) {
       console.warn("Submission progress table missing; proceeding without historical totals");
+      syncContext.missingTables.add("submission_progress");
       return new Map<string, number>();
     }
-    throw new Error(normalizeSchemaError(error, "Failed to load submission progress"));
+    throw new Error(normalizeSchemaError(error, "Failed to load submission progress", syncContext));
   }
   const totals = new Map<string, number>();
   (data ?? []).forEach((row) => {
@@ -131,7 +140,7 @@ async function loadExistingCompletion(userId: string, challengeIds: string[]) {
   return completion;
 }
 
-async function markActivityProcessed(userId: string, activityId: number, raw_payload: unknown) {
+async function markActivityProcessed(syncContext: SyncContext, userId: string, activityId: number, raw_payload: unknown) {
   const admin = getServiceRoleClient();
   const { error } = await admin
     .from("strava_activity_ingestions")
@@ -140,13 +149,14 @@ async function markActivityProcessed(userId: string, activityId: number, raw_pay
   if (error) {
     if (isMissingTableError(error, "strava_activity_ingestions")) {
       console.warn("Strava ingestion table missing; skipping ingestion record");
+      syncContext.missingTables.add("strava_activity_ingestions");
       return;
     }
-    throw new Error(normalizeSchemaError(error, "Failed to record ingestion"));
+    throw new Error(normalizeSchemaError(error, "Failed to record ingestion", syncContext));
   }
 }
 
-async function wasActivityProcessed(activityId: number) {
+async function wasActivityProcessed(syncContext: SyncContext, activityId: number) {
   const admin = getServiceRoleClient();
   const { count, error } = await admin
     .from("strava_activity_ingestions")
@@ -155,6 +165,7 @@ async function wasActivityProcessed(activityId: number) {
   if (error) {
     if (isMissingTableError(error, "strava_activity_ingestions")) {
       console.warn("Strava ingestion table missing; treating activities as unprocessed");
+      syncContext.missingTables.add("strava_activity_ingestions");
       return false;
     }
     throw error;
@@ -163,6 +174,7 @@ async function wasActivityProcessed(activityId: number) {
 }
 
 async function upsertSubmissionProgress(
+  syncContext: SyncContext,
   userId: string,
   challengeId: string,
   activityId: number,
@@ -190,9 +202,10 @@ async function upsertSubmissionProgress(
   if (error) {
     if (isMissingTableError(error, "submission_progress")) {
       console.warn("Submission progress table missing; skipping progress upsert");
+      syncContext.missingTables.add("submission_progress");
       return false;
     }
-    throw new Error(normalizeSchemaError(error, "Failed to upsert submission progress"));
+    throw new Error(normalizeSchemaError(error, "Failed to upsert submission progress", syncContext));
   }
   return true;
 }
@@ -239,6 +252,7 @@ async function recordSyncLog({
     matched_activities: result?.matchedActivities ?? null,
     progress_updates: result?.progressUpdates ?? null,
     sample_activities: result?.sampleActivities ?? null,
+    warnings: result?.missingTables ? Array.from(result.missingTables) : null,
     status,
     error: error ?? null,
   });
@@ -257,6 +271,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   const admin = getServiceRoleClient();
   const refreshed = await refreshConnectionIfNeeded(connection);
   const allowedTeamIds = await fetchTeamIdsForUser(refreshed.user_id);
+  const syncContext: SyncContext = { missingTables: new Set<string>() };
 
   const permittedChallenges = challenges.filter((challenge) => {
     if (challenge.team_ids && challenge.team_ids.length > 0) {
@@ -266,7 +281,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   });
 
   const challengeIds = permittedChallenges.map((challenge) => challenge.id);
-  const existingProgressTotals = await loadExistingProgress(refreshed.user_id, challengeIds);
+  const existingProgressTotals = await loadExistingProgress(syncContext, refreshed.user_id, challengeIds);
   const existingSubmissions = await loadExistingCompletion(refreshed.user_id, challengeIds);
 
   const since = getDefaultSinceDate(refreshed.last_synced_at);
@@ -287,7 +302,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   }));
 
   for (const activity of activities) {
-    if (await wasActivityProcessed(activity.id)) continue;
+    if (await wasActivityProcessed(syncContext, activity.id)) continue;
     processedActivities += 1;
     let matchedThisActivity = false;
 
@@ -298,6 +313,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
       if (typeof metricValue !== "number") continue;
 
       const progressRecorded = await upsertSubmissionProgress(
+        syncContext,
         refreshed.user_id,
         challenge.id,
         activity.id,
@@ -316,7 +332,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     }
 
     if (matchedThisActivity) matchedActivities += 1;
-    await markActivityProcessed(refreshed.user_id, activity.id, activity.raw);
+    await markActivityProcessed(syncContext, refreshed.user_id, activity.id, activity.raw);
   }
 
   for (const challenge of permittedChallenges) {
@@ -344,6 +360,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     processedActivities,
     matchedActivities,
     progressUpdates,
+    missingTables: syncContext.missingTables.size > 0 ? Array.from(syncContext.missingTables) : undefined,
     sampleActivities,
     lastSyncedAt,
   } satisfies StravaSyncResult;

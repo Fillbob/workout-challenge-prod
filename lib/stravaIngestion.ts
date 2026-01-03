@@ -53,6 +53,7 @@ export type StravaSyncResult = {
   processedActivities: number;
   matchedActivities: number;
   progressUpdates: number;
+  missingTables?: string[];
   sampleActivities: Array<{
     id: number;
     name: string;
@@ -226,3 +227,7 @@ export function getDefaultSinceDate(lastSyncedAt?: string | null) {
   if (parsedLast) return parsedLast;
   return fallback;
 }
+
+export type SyncContext = {
+  missingTables: Set<string>;
+};
