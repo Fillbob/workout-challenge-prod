@@ -42,6 +42,14 @@ interface Submission {
   progress_updated_at?: string | null;
 }
 
+interface SubmissionProgressRow {
+  challenge_id: string;
+  progress_value: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  completed_at: string | null;
+}
+
 interface RecentSubmission {
   id: string;
   user_id: string;
@@ -348,6 +356,7 @@ export default function DashboardPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [lastSeenMessageIds, setLastSeenMessageIds] = useState<Record<string, string | null>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [progressEntries, setProgressEntries] = useState<SubmissionProgressRow[]>([]);
   const [stravaStatus, setStravaStatus] = useState<StravaStatus>({
     status: "disconnected",
     lastError: null,
@@ -489,6 +498,31 @@ export default function DashboardPage() {
         map[row.challenge_id] = row;
       });
       setSubmissions(map);
+    },
+    [supabase],
+  );
+
+  const loadSubmissionProgress = useCallback(
+    async (id: string) => {
+      const { data, error } = await supabase
+        .from("submission_progress")
+        .select("challenge_id, progress_value, created_at, updated_at, completed_at")
+        .eq("user_id", id);
+
+      if (error) {
+        console.warn("Unable to load submission progress", error.message);
+        return;
+      }
+
+      setProgressEntries(
+        (data ?? []).map((row) => ({
+          challenge_id: String(row.challenge_id),
+          progress_value: row.progress_value === null ? null : Number(row.progress_value),
+          created_at: row.created_at ?? null,
+          updated_at: row.updated_at ?? null,
+          completed_at: row.completed_at ?? null,
+        })),
+      );
     },
     [supabase],
   );
@@ -648,6 +682,9 @@ export default function DashboardPage() {
       } else {
         loadStravaStatus();
       }
+      if (userId) {
+        loadSubmissionProgress(userId);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to sync Strava data";
       setStravaMessage(message);
@@ -659,7 +696,7 @@ export default function DashboardPage() {
     } finally {
       setStravaLoading(false);
     }
-  }, [loadStravaStatus]);
+  }, [loadStravaStatus, loadSubmissionProgress, userId]);
 
   const startStravaAuth = useCallback(() => {
     setStravaMessage(null);
@@ -677,6 +714,7 @@ export default function DashboardPage() {
     loadTeams();
     loadChallenges();
     loadSubmissions(userId);
+    loadSubmissionProgress(userId);
     loadAnnouncements();
     loadStravaStatus();
     const stored = window.localStorage.getItem("activeTeamId");
@@ -687,6 +725,7 @@ export default function DashboardPage() {
     loadTeams,
     loadChallenges,
     loadSubmissions,
+    loadSubmissionProgress,
     loadAnnouncements,
     loadStravaStatus,
   ]);
@@ -1044,8 +1083,34 @@ export default function DashboardPage() {
     challenges.forEach((challenge) => {
       const submission = submissions[challenge.id];
       const source = submission?.progress_source ?? null;
+      const startDate = parseDateSafe(challenge.start_date);
+      const endDate = parseDateSafe(challenge.end_date);
+      const endBoundary = endDate ? addDays(endDate, 1) : null;
+      const progressForChallenge = progressEntries.filter((entry) => entry.challenge_id === challenge.id);
+      const windowedEntries = progressForChallenge.filter((entry) => {
+        const timestamp = parseDateSafe(entry.updated_at ?? entry.created_at ?? entry.completed_at);
+        if (!timestamp) return true;
+        if (startDate && timestamp < startDate) return false;
+        if (endBoundary && timestamp >= endBoundary) return false;
+        return true;
+      });
+      const aggregatedValue =
+        windowedEntries.length > 0
+          ? windowedEntries.reduce((total, entry) => total + Number(entry.progress_value ?? 0), 0)
+          : null;
+      const latestEntryDate = progressForChallenge.reduce<Date | null>((latest, entry) => {
+        const timestamp = parseDateSafe(entry.updated_at ?? entry.created_at ?? entry.completed_at);
+        if (!timestamp) return latest;
+        if (!latest || timestamp > latest) return timestamp;
+        return latest;
+      }, null);
       const rawPercent = typeof submission?.progress_percent === "number" ? submission.progress_percent : null;
-      const value = typeof submission?.progress_value === "number" ? submission.progress_value : null;
+      const value =
+        aggregatedValue !== null
+          ? aggregatedValue
+          : typeof submission?.progress_value === "number"
+            ? submission.progress_value
+            : null;
       const target =
         typeof submission?.progress_target === "number"
           ? submission.progress_target
@@ -1056,21 +1121,22 @@ export default function DashboardPage() {
       const hasTarget = typeof target === "number" && target > 0;
       const derivedPercent = rawPercent ?? (hasTarget && typeof value === "number" ? (value / target) * 100 : null);
       const percent = clampPercent(derivedPercent ?? (submission?.completed ? 100 : 0));
-      const hasData = rawPercent !== null || (hasTarget && typeof value === "number");
+      const hasData = rawPercent !== null || windowedEntries.length > 0 || (hasTarget && typeof value === "number");
       const label =
         value !== null
           ? `${value.toLocaleString()}${unit ? ` ${unit}` : ""}${
               hasTarget ? ` of ${target?.toLocaleString()}${unit ? ` ${unit}` : ""}` : ""
             }`
           : null;
-      const updatedAt = submission?.progress_updated_at ?? submission?.completed_at ?? null;
+      const updatedAt =
+        latestEntryDate?.toISOString() ?? submission?.progress_updated_at ?? submission?.completed_at ?? null;
       const autoCompleted = Boolean(submission?.auto_completed || (source === "strava" && percent >= 100 && hasData));
 
       map[challenge.id] = { percent, label, source, updatedAt, hasData, autoCompleted };
     });
 
     return map;
-  }, [challenges, submissions]);
+  }, [challenges, progressEntries, submissions]);
 
   const submissionState = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -1637,7 +1703,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="h-2 w-full rounded-full bg-white/70 shadow-inner shadow-orange-100">
                           <div
-                            className="h-2 rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-sky-400 transition-all"
+                            className="h-2 rounded-full bg-orange-500 transition-all"
                             style={{ width: `${progressPercent}%` }}
                             aria-label={`Progress for ${challenge.title}`}
                           />
