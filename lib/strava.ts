@@ -55,11 +55,13 @@ export function getStravaRedirectUri() {
 
 export async function exchangeAuthorizationCode(code: string) {
   const { clientId, clientSecret } = getClientConfig();
+  const redirectUri = getStravaRedirectUri();
   const params = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,
     code,
     grant_type: "authorization_code",
+    redirect_uri: redirectUri,
   });
 
   const response = await fetch(STRAVA_TOKEN_URL, {
