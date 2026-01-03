@@ -85,6 +85,27 @@ export default function AdminPage() {
   const [announcementLoadingIds, setAnnouncementLoadingIds] = useState<Set<string>>(new Set());
   const announcementEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const normalizeTargetForDistance = (form: typeof emptyForm) => {
+    const parsedValue = Number.isFinite(form.target_value ?? NaN) ? form.target_value : null;
+    const targetUnit = form.target_unit ?? null;
+    const progressUnit = form.progress_unit ?? targetUnit ?? null;
+
+    if (form.metric_type !== "distance" || parsedValue === null) {
+      return { target_value: parsedValue, target_unit: targetUnit, progress_unit: progressUnit };
+    }
+
+    const normalizedUnit = targetUnit?.toLowerCase().trim() ?? "";
+    const expectsMiles = normalizedUnit.includes("mile");
+
+    if (!expectsMiles) {
+      return { target_value: parsedValue, target_unit: targetUnit ?? "meters", progress_unit: progressUnit };
+    }
+
+    const meters = parsedValue * 1609.34;
+
+    return { target_value: meters, target_unit: "meters", progress_unit: progressUnit };
+  };
+
   const loadChallenges = useCallback(async () => {
     const { data, error } = await supabase
       .from("challenges")
@@ -165,12 +186,20 @@ export default function AdminPage() {
   const handleSubmit = async () => {
     setStatus(null);
     console.log("Creating/updating challenges via", process.env.NEXT_PUBLIC_SUPABASE_URL);
+
+    const normalizedTarget = normalizeTargetForDistance(form);
+    const target_value = normalizedTarget.target_value;
+    const target_unit = normalizedTarget.target_unit;
+    const progress_unit = normalizedTarget.progress_unit;
+
     if (editingId) {
       const { error } = await supabase
         .from("challenges")
         .update({
           ...form,
-          target_value: Number.isFinite(form.target_value ?? NaN) ? form.target_value : null,
+          target_value,
+          target_unit,
+          progress_unit,
           activity_types: form.activity_types ?? [],
         })
         .eq("id", editingId);
@@ -182,7 +211,9 @@ export default function AdminPage() {
     } else {
       const { error } = await supabase.from("challenges").insert({
         ...form,
-        target_value: Number.isFinite(form.target_value ?? NaN) ? form.target_value : null,
+        target_value,
+        target_unit,
+        progress_unit,
         activity_types: form.activity_types ?? [],
       });
       if (error) {
@@ -419,6 +450,7 @@ export default function AdminPage() {
       metric_type: challenge.metric_type ?? "manual",
       target_value: challenge.target_value ?? null,
       target_unit: challenge.target_unit ?? null,
+      progress_unit: challenge.progress_unit ?? challenge.target_unit ?? null,
       activity_types: challenge.activity_types ?? [],
     });
   };
