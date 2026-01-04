@@ -736,6 +736,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleStravaSync = useCallback(async () => {
+    if (stravaLoading) return;
     setStravaLoading(true);
     try {
       const response = await fetch(STRAVA_SYNC_ENDPOINT, { method: "POST" });
@@ -771,7 +772,7 @@ export default function DashboardPage() {
     } finally {
       setStravaLoading(false);
     }
-  }, [loadStravaStatus, loadSubmissionProgress, userId]);
+  }, [loadStravaStatus, loadSubmissionProgress, stravaLoading, userId]);
 
   const startStravaAuth = useCallback(() => {
     setStravaMessage(null);
