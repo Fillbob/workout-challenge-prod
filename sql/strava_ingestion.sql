@@ -53,6 +53,10 @@ create table if not exists public.strava_sync_logs (
   started_at timestamptz not null default now(),
   finished_at timestamptz not null default now(),
   since timestamptz,
+  window_after timestamptz,
+  window_before timestamptz,
+  mode text,
+  cursor_source text,
   fetched_activities integer,
   processed_activities integer,
   matched_activities integer,
@@ -69,6 +73,10 @@ alter table if exists public.strava_sync_logs
   add column if not exists started_at timestamptz not null default now(),
   add column if not exists finished_at timestamptz not null default now(),
   add column if not exists since timestamptz,
+  add column if not exists window_after timestamptz,
+  add column if not exists window_before timestamptz,
+  add column if not exists mode text,
+  add column if not exists cursor_source text,
   add column if not exists fetched_activities integer,
   add column if not exists processed_activities integer,
   add column if not exists matched_activities integer,
@@ -79,3 +87,27 @@ alter table if exists public.strava_sync_logs
   add column if not exists warnings jsonb;
 
 create index if not exists strava_sync_logs_user_idx on public.strava_sync_logs(user_id, started_at desc);
+
+-- Track incremental sync cursor and locks per user.
+create table if not exists public.strava_sync_state (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  athlete_id bigint,
+  last_activity_at timestamptz,
+  sync_in_progress boolean default false,
+  locked_at timestamptz,
+  lock_expires_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.set_strava_sync_state_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists strava_sync_state_set_updated_at on public.strava_sync_state;
+create trigger strava_sync_state_set_updated_at
+before update on public.strava_sync_state
+for each row execute procedure public.set_strava_sync_state_updated_at();
