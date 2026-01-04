@@ -2,13 +2,15 @@ import {
   activityMatchesChallenge,
   fetchRecentActivities,
   fetchTeamIdsForUser,
-  getDefaultSinceDate,
   loadActiveChallenges,
   normalizeMetricValueForChallenge,
   refreshConnectionIfNeeded,
+  parseIsoDate,
+  computeSyncWindow,
   type ChallengeRow,
   type StravaConnection,
   type StravaSyncResult,
+  type SyncMode,
   type SyncContext,
 } from "@/lib/stravaIngestion";
 import { getServiceRoleClient } from "@/lib/supabase/admin";
@@ -67,6 +69,11 @@ function normalizeSchemaError(error: unknown, context: string, syncContext?: Syn
   if (message.includes("public.strava_sync_logs")) {
     registerMissingTable("strava_sync_logs");
     return `${context}: missing strava_sync_logs table. Apply sql/strava_ingestion.sql to Supabase and reload the schema cache.`;
+  }
+
+  if (message.includes("public.strava_sync_state")) {
+    registerMissingTable("strava_sync_state");
+    return `${context}: missing strava_sync_state table. Apply the latest SQL migration to Supabase and reload the schema cache.`;
   }
 
   return `${context}: ${message}`;
@@ -225,6 +232,105 @@ async function upsertSubmission(userId: string, challengeId: string, completed: 
     );
 }
 
+type SyncStateRow = {
+  last_activity_at?: string | null;
+  sync_in_progress?: boolean | null;
+  lock_expires_at?: string | null;
+};
+
+async function ensureSyncState(syncContext: SyncContext, userId: string, athleteId: number | null) {
+  const admin = getServiceRoleClient();
+  const { error } = await admin
+    .from("strava_sync_state")
+    .upsert({ user_id: userId, athlete_id: athleteId }, { onConflict: "user_id", ignoreDuplicates: true });
+
+  if (error) {
+    if (isMissingTableError(error, "strava_sync_state")) {
+      console.warn("Strava sync state table missing; proceeding without cursor persistence");
+      syncContext.missingTables.add("strava_sync_state");
+      return null;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to ensure sync state", syncContext));
+  }
+}
+
+async function loadSyncState(syncContext: SyncContext, userId: string) {
+  const admin = getServiceRoleClient();
+  const { data, error } = await admin
+    .from("strava_sync_state")
+    .select("last_activity_at, sync_in_progress, lock_expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingTableError(error, "strava_sync_state")) {
+      syncContext.missingTables.add("strava_sync_state");
+      return null;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to load sync state", syncContext));
+  }
+
+  return data as SyncStateRow | null;
+}
+
+async function acquireSyncLock(syncContext: SyncContext, userId: string, athleteId: number | null) {
+  const admin = getServiceRoleClient();
+  const now = new Date();
+  const expiration = new Date(now.getTime() + 5 * 60 * 1000);
+  const nowIso = now.toISOString();
+  const expirationIso = expiration.toISOString();
+
+  const { data, error } = await admin
+    .from("strava_sync_state")
+    .update({ sync_in_progress: true, lock_expires_at: expirationIso, locked_at: nowIso, athlete_id: athleteId })
+    .eq("user_id", userId)
+    .or(`sync_in_progress.is.false,sync_in_progress.is.null,lock_expires_at.is.null,lock_expires_at.lt.${nowIso}`)
+    .select("user_id")
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingTableError(error, "strava_sync_state")) {
+      syncContext.missingTables.add("strava_sync_state");
+      return true;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to acquire sync lock", syncContext));
+  }
+
+  return Boolean(data);
+}
+
+async function releaseSyncLock(syncContext: SyncContext, userId: string) {
+  const admin = getServiceRoleClient();
+  const { error } = await admin
+    .from("strava_sync_state")
+    .update({ sync_in_progress: false, lock_expires_at: null })
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isMissingTableError(error, "strava_sync_state")) {
+      syncContext.missingTables.add("strava_sync_state");
+      return;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to release sync lock", syncContext));
+  }
+}
+
+async function updateLastActivityCursor(syncContext: SyncContext, userId: string, occurredAt: Date) {
+  const admin = getServiceRoleClient();
+  const { error } = await admin
+    .from("strava_sync_state")
+    .update({ last_activity_at: occurredAt.toISOString() })
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isMissingTableError(error, "strava_sync_state")) {
+      syncContext.missingTables.add("strava_sync_state");
+      return;
+    }
+    throw new Error(normalizeSchemaError(error, "Failed to update cursor", syncContext));
+  }
+}
+
 async function recordSyncLog({
   connection,
   result,
@@ -246,13 +352,20 @@ async function recordSyncLog({
     athlete_id: result?.athleteId ?? connection.athlete_id ?? null,
     started_at: startedAt.toISOString(),
     finished_at: finishedAt.toISOString(),
-    since: result?.since?.toISOString() ?? null,
+    since: result?.windowAfter?.toISOString() ?? null,
+    window_after: result?.windowAfter?.toISOString() ?? null,
+    window_before: result?.windowBefore?.toISOString() ?? null,
+    mode: result?.mode ?? null,
+    cursor_source: result?.cursorSource ?? null,
     fetched_activities: result?.fetchedActivities ?? null,
     processed_activities: result?.processedActivities ?? null,
     matched_activities: result?.matchedActivities ?? null,
     progress_updates: result?.progressUpdates ?? null,
     sample_activities: result?.sampleActivities ?? null,
-    warnings: result?.missingTables ? Array.from(result.missingTables) : null,
+    warnings:
+      result?.missingTables || result?.warnings
+        ? Array.from(new Set([...(result.missingTables ?? []), ...(result.warnings ?? [])]))
+        : null,
     status,
     error: error ?? null,
   });
@@ -267,11 +380,24 @@ async function recordSyncLog({
   }
 }
 
-async function syncConnection(connection: StravaConnection, challenges: ChallengeRow[]): Promise<StravaSyncResult> {
+async function syncConnection({
+  connection,
+  challenges,
+  mode,
+  syncState,
+  syncContext,
+  now,
+}: {
+  connection: StravaConnection;
+  challenges: ChallengeRow[];
+  mode: SyncMode;
+  syncState: SyncStateRow | null;
+  syncContext: SyncContext;
+  now: Date;
+}): Promise<StravaSyncResult> {
   const admin = getServiceRoleClient();
   const refreshed = await refreshConnectionIfNeeded(connection);
   const allowedTeamIds = await fetchTeamIdsForUser(refreshed.user_id);
-  const syncContext: SyncContext = { missingTables: new Set<string>() };
 
   const permittedChallenges = challenges.filter((challenge) => {
     if (challenge.team_ids && challenge.team_ids.length > 0) {
@@ -284,12 +410,19 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   const existingProgressTotals = await loadExistingProgress(syncContext, refreshed.user_id, challengeIds);
   const existingSubmissions = await loadExistingCompletion(refreshed.user_id, challengeIds);
 
-  const since = getDefaultSinceDate(refreshed.last_synced_at);
-  const activities = await fetchRecentActivities(refreshed, since);
+  const lastActivityAt = parseIsoDate(syncState?.last_activity_at ?? undefined);
+  const window = computeSyncWindow({
+    mode,
+    now,
+    challenges: permittedChallenges,
+    lastActivityAt,
+  });
+  const activities = await fetchRecentActivities(refreshed, window);
   const newProgress: Map<string, number> = new Map();
   let processedActivities = 0;
   let matchedActivities = 0;
   let progressUpdates = 0;
+  const warnings: string[] = [];
 
   const sampleActivities = activities.slice(0, 5).map((activity) => ({
     id: activity.id,
@@ -347,6 +480,17 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
 
   const lastSyncedAt = new Date().toISOString();
 
+  const maxOccurredAt = activities.length > 0 ? new Date(Math.max(...activities.map((activity) => activity.occurred_at.getTime()))) : null;
+  if (mode === "incremental" && maxOccurredAt) {
+    await updateLastActivityCursor(syncContext, refreshed.user_id, maxOccurredAt);
+  }
+
+  if (activities.length === 0) {
+    warnings.push(
+      `No activities fetched for window ${window.after.toISOString()} - ${window.before ? window.before.toISOString() : "(open)"}.`,
+    );
+  }
+
   await admin
     .from("strava_connections")
     .update({ last_synced_at: lastSyncedAt, last_error: null })
@@ -355,7 +499,10 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   return {
     userId: refreshed.user_id,
     athleteId: refreshed.athlete_id ?? null,
-    since,
+    windowAfter: window.after,
+    windowBefore: window.before,
+    mode,
+    cursorSource: window.cursorSource,
     fetchedActivities: activities.length,
     processedActivities,
     matchedActivities,
@@ -363,6 +510,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     missingTables: syncContext.missingTables.size > 0 ? Array.from(syncContext.missingTables) : undefined,
     sampleActivities,
     lastSyncedAt,
+    warnings: warnings.length > 0 ? warnings : undefined,
   } satisfies StravaSyncResult;
 }
 
@@ -408,10 +556,59 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No Strava connection found" }, { status: 403 });
       }
     }
+    const mode: SyncMode = isSecretAuthorized ? "incremental" : "window";
+
     for (const connection of connections) {
       const startedAt = new Date();
+      const syncContext: SyncContext = { missingTables: new Set<string>() };
+      let lockAcquired = false;
       try {
-        const result = await syncConnection(connection, challenges);
+        await ensureSyncState(syncContext, connection.user_id, connection.athlete_id ?? null);
+        const syncState = await loadSyncState(syncContext, connection.user_id);
+        lockAcquired = await acquireSyncLock(syncContext, connection.user_id, connection.athlete_id ?? null);
+        if (!lockAcquired) {
+          const warning = "Sync already in progress";
+          const fallbackWindow = computeSyncWindow({
+            mode,
+            now: new Date(),
+            challenges,
+            lastActivityAt: parseIsoDate(syncState?.last_activity_at ?? undefined),
+          });
+          const result: StravaSyncResult = {
+            userId: connection.user_id,
+            athleteId: connection.athlete_id ?? null,
+            windowAfter: fallbackWindow.after,
+            windowBefore: fallbackWindow.before,
+            mode,
+            cursorSource: fallbackWindow.cursorSource,
+            fetchedActivities: 0,
+            processedActivities: 0,
+            matchedActivities: 0,
+            progressUpdates: 0,
+            sampleActivities: [],
+            lastSyncedAt: connection.last_synced_at ?? new Date().toISOString(),
+            warnings: [warning],
+          } satisfies StravaSyncResult;
+          await recordSyncLog({
+            connection,
+            result,
+            startedAt,
+            finishedAt: new Date(),
+            status: "error",
+            error: warning,
+          });
+          results.push(result);
+          continue;
+        }
+
+        const result = await syncConnection({
+          connection,
+          challenges,
+          mode,
+          syncState,
+          syncContext,
+          now: new Date(),
+        });
         results.push(result);
         if (!latestSyncedAt) latestSyncedAt = result.lastSyncedAt;
         await recordSyncLog({
@@ -440,6 +637,14 @@ export async function POST(request: Request) {
           status: "error",
           error: message,
         });
+      } finally {
+        if (lockAcquired) {
+          try {
+            await releaseSyncLock(syncContext, connection.user_id);
+          } catch (releaseError) {
+            console.error("Failed to release sync lock", releaseError);
+          }
+        }
       }
     }
 
