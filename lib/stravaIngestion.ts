@@ -55,6 +55,10 @@ export type StravaSyncResult = {
   processedActivities: number;
   matchedActivities: number;
   progressUpdates: number;
+  pagesFetched?: number;
+  warnings?: string[];
+  afterUsed?: number;
+  afterUsedIso?: string;
   missingTables?: string[];
   sampleActivities: Array<{
     id: number;
@@ -70,6 +74,7 @@ export type StravaSyncResult = {
 
 const STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities";
 const INGESTION_LOOKBACK_DAYS = 30;
+const SYNC_NOW_BUFFER_MINUTES = 5;
 
 export function parseIsoDate(value: string | null | undefined) {
   if (!value) return null;
@@ -136,17 +141,30 @@ export async function fetchRecentActivities(connection: StravaConnection, since?
   const params = new URLSearchParams({ per_page: "50" });
   if (afterParam) params.set("after", `${afterParam}`);
 
-  const response = await fetch(`${STRAVA_ACTIVITIES_URL}?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${connection.access_token}` },
-  });
+  const activities: NormalizedActivity[] = [];
+  let page = 1;
+  let pagesFetched = 0;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to load Strava activities: ${response.status} ${errorText}`);
+  while (true) {
+    params.set("page", `${page}`);
+    const response = await fetch(`${STRAVA_ACTIVITIES_URL}?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${connection.access_token}` },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load Strava activities: ${response.status} ${errorText}`);
+    }
+
+    const payload = (await response.json()) as StravaActivity[];
+    activities.push(...payload.map(normalizeActivity));
+    pagesFetched += 1;
+
+    if (payload.length < 50) break;
+    page += 1;
   }
 
-  const payload = (await response.json()) as StravaActivity[];
-  return payload.map(normalizeActivity);
+  return { activities, pagesFetched };
 }
 
 export function activityMatchesChallenge(
@@ -259,6 +277,30 @@ export function getDefaultSinceDate(lastSyncedAt?: string | null) {
   const parsedLast = parseIsoDate(lastSyncedAt ?? undefined);
   if (parsedLast) return parsedLast;
   return fallback;
+}
+
+export function startOfWeekUtc(now: Date) {
+  const day = now.getUTCDay();
+  const diffToMonday = (day + 6) % 7;
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  start.setUTCDate(start.getUTCDate() - diffToMonday);
+  return start;
+}
+
+export function computeAfterForSyncNow({
+  now,
+  challengeStart,
+  weekStart,
+}: {
+  now: Date;
+  challengeStart?: Date | null;
+  weekStart?: Date | null;
+}) {
+  const week = weekStart ?? startOfWeekUtc(now);
+  const challengeStartDate = challengeStart ?? null;
+  const base = challengeStartDate ? (challengeStartDate > week ? challengeStartDate : week) : week;
+  const buffered = new Date(base.getTime() - SYNC_NOW_BUFFER_MINUTES * 60 * 1000);
+  return Math.floor(buffered.getTime() / 1000);
 }
 
 export type SyncContext = {

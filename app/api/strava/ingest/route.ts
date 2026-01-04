@@ -5,6 +5,9 @@ import {
   getDefaultSinceDate,
   loadActiveChallenges,
   normalizeMetricValueForChallenge,
+  computeAfterForSyncNow,
+  startOfWeekUtc,
+  parseIsoDate,
   refreshConnectionIfNeeded,
   type ChallengeRow,
   type StravaConnection,
@@ -241,6 +244,10 @@ async function recordSyncLog({
   error?: string | null;
 }) {
   const admin = getServiceRoleClient();
+  const warnings = [
+    ...(result?.missingTables ?? []),
+    ...(result?.warnings ?? []),
+  ];
   const { error: logError } = await admin.from("strava_sync_logs").insert({
     user_id: result?.userId ?? connection.user_id,
     athlete_id: result?.athleteId ?? connection.athlete_id ?? null,
@@ -252,7 +259,7 @@ async function recordSyncLog({
     matched_activities: result?.matchedActivities ?? null,
     progress_updates: result?.progressUpdates ?? null,
     sample_activities: result?.sampleActivities ?? null,
-    warnings: result?.missingTables ? Array.from(result.missingTables) : null,
+    warnings: warnings.length > 0 ? Array.from(new Set(warnings)) : null,
     status,
     error: error ?? null,
   });
@@ -267,7 +274,11 @@ async function recordSyncLog({
   }
 }
 
-async function syncConnection(connection: StravaConnection, challenges: ChallengeRow[]): Promise<StravaSyncResult> {
+async function syncConnection(
+  connection: StravaConnection,
+  challenges: ChallengeRow[],
+  options?: { sinceOverride?: Date; warnings?: string[]; afterUsedSeconds?: number },
+): Promise<StravaSyncResult> {
   const admin = getServiceRoleClient();
   const refreshed = await refreshConnectionIfNeeded(connection);
   const allowedTeamIds = await fetchTeamIdsForUser(refreshed.user_id);
@@ -284,12 +295,14 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
   const existingProgressTotals = await loadExistingProgress(syncContext, refreshed.user_id, challengeIds);
   const existingSubmissions = await loadExistingCompletion(refreshed.user_id, challengeIds);
 
-  const since = getDefaultSinceDate(refreshed.last_synced_at);
-  const activities = await fetchRecentActivities(refreshed, since);
+  const since = options?.sinceOverride ?? getDefaultSinceDate(refreshed.last_synced_at);
+  const afterUsedSeconds = options?.afterUsedSeconds ?? Math.floor(since.getTime() / 1000);
+  const { activities, pagesFetched } = await fetchRecentActivities(refreshed, since);
   const newProgress: Map<string, number> = new Map();
   let processedActivities = 0;
   let matchedActivities = 0;
   let progressUpdates = 0;
+  const warnings = [...(options?.warnings ?? [])];
 
   const sampleActivities = activities.slice(0, 5).map((activity) => ({
     id: activity.id,
@@ -352,14 +365,33 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     .update({ last_synced_at: lastSyncedAt, last_error: null })
     .eq("user_id", refreshed.user_id);
 
+  const activityTimes = activities.map((activity) => activity.occurred_at.getTime());
+  const earliestActivity = activityTimes.length > 0 ? new Date(Math.min(...activityTimes)).toISOString() : null;
+  const latestActivity = activityTimes.length > 0 ? new Date(Math.max(...activityTimes)).toISOString() : null;
+  const afterUsedIso = new Date(afterUsedSeconds * 1000).toISOString();
+  console.log("[strava-sync] window", {
+    user_id: refreshed.user_id,
+    athlete_id: refreshed.athlete_id,
+    after_used: afterUsedSeconds,
+    after_used_iso: afterUsedIso,
+    activities: activities.length,
+    pages_fetched: pagesFetched,
+    earliest_activity: earliestActivity,
+    latest_activity: latestActivity,
+  });
+
   return {
     userId: refreshed.user_id,
     athleteId: refreshed.athlete_id ?? null,
     since,
+    afterUsed: afterUsedSeconds,
+    afterUsedIso,
     fetchedActivities: activities.length,
     processedActivities,
     matchedActivities,
     progressUpdates,
+    pagesFetched,
+    warnings: warnings.length > 0 ? warnings : undefined,
     missingTables: syncContext.missingTables.size > 0 ? Array.from(syncContext.missingTables) : undefined,
     sampleActivities,
     lastSyncedAt,
@@ -411,7 +443,32 @@ export async function POST(request: Request) {
     for (const connection of connections) {
       const startedAt = new Date();
       try {
-        const result = await syncConnection(connection, challenges);
+        const syncWarnings: string[] = [];
+        let sinceOverride: Date | undefined;
+        if (!isSecretAuthorized) {
+          const now = new Date();
+          const weekStart = startOfWeekUtc(now);
+          const challengeStarts = challenges
+            .map((challenge) => parseIsoDate(challenge.start_date))
+            .filter((date): date is Date => Boolean(date));
+          const earliestChallengeStart =
+            challengeStarts.length > 0
+              ? new Date(Math.min(...challengeStarts.map((date) => date.getTime())))
+              : null;
+          const afterSeconds = computeAfterForSyncNow({
+            now,
+            challengeStart: earliestChallengeStart,
+            weekStart,
+          });
+          sinceOverride = new Date(afterSeconds * 1000);
+          syncWarnings.push("mode=sync_now_window", `after=${sinceOverride.toISOString()}`);
+        }
+
+        const result = await syncConnection(connection, challenges, {
+          sinceOverride,
+          warnings: syncWarnings,
+          afterUsedSeconds: sinceOverride ? Math.floor(sinceOverride.getTime() / 1000) : undefined,
+        });
         results.push(result);
         if (!latestSyncedAt) latestSyncedAt = result.lastSyncedAt;
         await recordSyncLog({
@@ -443,7 +500,18 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ status: "processed", connections: connections.length, last_synced_at: latestSyncedAt, results });
+    const responseResults = results.map((result) => ({
+      ...result,
+      after_used: result.afterUsed ?? Math.floor(result.since.getTime() / 1000),
+      after_used_iso: result.afterUsedIso ?? result.since.toISOString(),
+    }));
+
+    return NextResponse.json({
+      status: "processed",
+      connections: connections.length,
+      last_synced_at: latestSyncedAt,
+      results: responseResults,
+    });
   } catch (error) {
     const message =
       error instanceof Error

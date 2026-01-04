@@ -119,7 +119,7 @@ interface ChallengeClosingInfo {
 }
 
 const MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
-const EDIT_GRACE_PERIOD_DAYS = 2;
+const EDIT_GRACE_PERIOD_DAYS = 0;
 const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
   isEditable: true,
   isLocked: false,
@@ -150,15 +150,29 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function startBoundary(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 1, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
 function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClosingInfo {
   const startDate = parseDateSafe(challenge.start_date);
   const endDate = parseDateSafe(challenge.end_date);
+  const startAt = startDate ? startBoundary(startDate) : null;
+  const lockDate = endDate ? endOfDay(addDays(endDate, EDIT_GRACE_PERIOD_DAYS)) : null;
   const startDateLabel = startDate
     ? startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : null;
 
-  if (startDate && now < startDate) {
-    const timeUntilStart = startDate.getTime() - now.getTime();
+  if (startAt && now < startAt) {
+    const timeUntilStart = startAt.getTime() - now.getTime();
     const daysUntilStart = Math.max(0, Math.ceil(timeUntilStart / MILLISECONDS_IN_DAY));
 
     return {
@@ -187,16 +201,33 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
     };
   }
 
-  const lockDate = addDays(endDate, EDIT_GRACE_PERIOD_DAYS);
+  if (!lockDate) {
+    return {
+      isEditable: true,
+      isLocked: false,
+      isUpcoming: false,
+      closingLabel: "Closing date not set",
+      lockDateLabel: null,
+      startDateLabel,
+      daysUntilClose: null,
+    };
+  }
+
   const isLocked = now > lockDate;
   const timeRemaining = lockDate.getTime() - now.getTime();
   const daysUntilClose = Math.max(0, Math.ceil(timeRemaining / MILLISECONDS_IN_DAY));
+  const closingLabel =
+    timeRemaining >= 0
+      ? daysUntilClose === 0
+        ? "Closes today at 11:59 PM"
+        : `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}`
+      : "Closed";
 
   return {
     isEditable: timeRemaining >= 0,
     isLocked,
     isUpcoming: false,
-    closingLabel: timeRemaining >= 0 ? `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}` : "Closed",
+    closingLabel,
     lockDateLabel: lockDate.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     startDateLabel,
     daysUntilClose,
@@ -381,6 +412,9 @@ export default function DashboardPage() {
   const [stravaLoading, setStravaLoading] = useState(false);
   const [hasReadQueryParams, setHasReadQueryParams] = useState(false);
   const [expandedChallenges, setExpandedChallenges] = useState<Set<string>>(new Set());
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<number>>(new Set());
+  const [removalStatus, setRemovalStatus] = useState<string | null>(null);
+  const [removalLoading, setRemovalLoading] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -601,6 +635,47 @@ export default function DashboardPage() {
     [loadActivityDetails, supabase],
   );
 
+  const toggleActivitySelection = useCallback((activityId: number, checked: boolean) => {
+    setSelectedActivityIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(activityId);
+      } else {
+        next.delete(activityId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleRemoveActivities = useCallback(async () => {
+    if (!userId || selectedActivityIds.size === 0 || removalLoading) return;
+    setRemovalStatus(null);
+    setRemovalLoading(true);
+
+    try {
+      const response = await fetch("/api/strava/remove-activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityIds: Array.from(selectedActivityIds) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to remove activities");
+      }
+
+      setRemovalStatus(payload.message ?? "Activities removed");
+      setSelectedActivityIds(new Set());
+      await loadSubmissionProgress(userId);
+      await loadSubmissions(userId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to remove activities";
+      setRemovalStatus(message);
+    } finally {
+      setRemovalLoading(false);
+    }
+  }, [loadSubmissionProgress, loadSubmissions, removalLoading, selectedActivityIds, userId]);
+
   const loadAnnouncements = useCallback(async () => {
     try {
       const payload = await listAnnouncements();
@@ -736,6 +811,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleStravaSync = useCallback(async () => {
+    if (stravaLoading) return;
     setStravaLoading(true);
     try {
       const response = await fetch(STRAVA_SYNC_ENDPOINT, { method: "POST" });
@@ -771,7 +847,7 @@ export default function DashboardPage() {
     } finally {
       setStravaLoading(false);
     }
-  }, [loadStravaStatus, loadSubmissionProgress, userId]);
+  }, [loadStravaStatus, loadSubmissionProgress, stravaLoading, userId]);
 
   const startStravaAuth = useCallback(() => {
     setStravaMessage(null);
@@ -1161,6 +1237,7 @@ export default function DashboardPage() {
         autoCompleted: boolean;
         entries: Array<{
           id: string;
+          activityId: number | null;
           value: number | null;
           unit: string | null;
           occurredAt: string | null;
@@ -1231,6 +1308,7 @@ export default function DashboardPage() {
 
         return {
           id: entry.activity_id ? String(entry.activity_id) : `${challenge.id}-entry-${index}`,
+          activityId: entry.activity_id ? Number(entry.activity_id) : null,
           value: entry.progress_value,
           unit,
           occurredAt,
@@ -1798,8 +1876,8 @@ export default function DashboardPage() {
                     : "This challenge hasn't started yet."
                   : closingInfo.isEditable
                     ? closingInfo.lockDateLabel
-                      ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
-                      : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
+                      ? `Edits lock ${closingInfo.lockDateLabel} at 11:59 PM.`
+                      : "Edits lock at the end of the day."
                     : "Edits are locked for this challenge.";
 
                 return (
@@ -1848,14 +1926,14 @@ export default function DashboardPage() {
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                         <span
-                        className={`rounded-full border px-2 py-1 ${
-                          closingInfo.isEditable
-                            ? "border-orange-200 bg-orange-100 text-orange-700"
-                            : "border-slate-200 bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {closingInfo.closingLabel}
-                      </span>
+                          className={`rounded-full border px-2 py-1 ${
+                            closingInfo.isEditable
+                              ? "border-orange-200 bg-orange-100 text-orange-700"
+                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {closingInfo.closingLabel}
+                        </span>
                         <span className="text-slate-500">{statusDetail}</span>
                         {autoLocked && (
                           <span className="rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700">Auto-completed from Strava</span>
@@ -1868,7 +1946,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="h-2 w-full rounded-full bg-white/70 shadow-inner shadow-orange-100">
                           <div
-                            className="h-2 rounded-full bg-orange-500 transition-all"
+                            className={`h-2 rounded-full transition-all ${progressPercent >= 100 ? "bg-emerald-500" : "bg-orange-500"}`}
                             style={{ width: `${progressPercent}%` }}
                             aria-label={`Progress for ${challenge.title}`}
                           />
@@ -1942,27 +2020,63 @@ export default function DashboardPage() {
 
                                     return (
                                       <li key={entry.id} className="px-3 py-2 text-slate-700">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="space-y-0.5">
-                                            <p className="text-sm font-semibold text-slate-900">
-                                              {entry.activityType || entry.name || "Submission"}
-                                            </p>
-                                            {entry.name && (
-                                              <p className="text-xs text-slate-600">{entry.name}</p>
-                                            )}
-                                            <p className="text-[11px] text-slate-500">{dateLabel || "Date unavailable"}</p>
-                                          </div>
-                                          <div className="text-right">
-                                            <p className="text-sm font-semibold text-slate-900">{valueLabel}</p>
-                                            {durationLabel && (
-                                              <p className="text-[11px] text-slate-600">Time: {durationLabel}</p>
-                                            )}
+                                        <div className="flex items-start gap-3">
+                                          <input
+                                            type="checkbox"
+                                            aria-label={`Remove ${entry.name ?? "activity"}`}
+                                            disabled={!entry.activityId}
+                                            checked={entry.activityId ? selectedActivityIds.has(entry.activityId) : false}
+                                            onChange={(event) =>
+                                              entry.activityId &&
+                                              toggleActivitySelection(entry.activityId, event.currentTarget.checked)
+                                            }
+                                            className="mt-1 h-4 w-4 cursor-pointer rounded border-orange-200 text-orange-600 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                          />
+                                          <div className="flex w-full items-start justify-between gap-3">
+                                            <div className="space-y-0.5">
+                                              <p className="text-sm font-semibold text-slate-900">
+                                                {entry.activityType || entry.name || "Submission"}
+                                              </p>
+                                              {entry.name && (
+                                                <p className="text-xs text-slate-600">{entry.name}</p>
+                                              )}
+                                              <p className="text-[11px] text-slate-500">{dateLabel || "Date unavailable"}</p>
+                                              {!entry.activityId && (
+                                                <p className="text-[11px] text-slate-500">Manual entry</p>
+                                              )}
+                                            </div>
+                                            <div className="text-right">
+                                              <p className="text-sm font-semibold text-slate-900">{valueLabel}</p>
+                                              {durationLabel && (
+                                                <p className="text-[11px] text-slate-600">Time: {durationLabel}</p>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </li>
                                     );
                                   })}
                                 </ul>
+                              )}
+                              {challengeEntries.length > 0 && (
+                                <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-[11px] text-slate-600">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={selectedActivityIds.size === 0 || removalLoading}
+                                      onClick={handleRemoveActivities}
+                                      className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                                        selectedActivityIds.size === 0 || removalLoading
+                                          ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                                          : "bg-rose-600 text-white hover:bg-rose-700"
+                                      }`}
+                                    >
+                                      {removalLoading ? "Removing..." : "Remove activities"}
+                                    </button>
+                                    <span>{selectedActivityIds.size} selected</span>
+                                  </div>
+                                  {removalStatus && <span className="text-[11px] text-slate-500">{removalStatus}</span>}
+                                </div>
                               )}
                             </div>
                           )}
@@ -2044,7 +2158,7 @@ export default function DashboardPage() {
                               </span>
                               <span className="text-slate-500">
                                 {closingInfo.lockDateLabel
-                                  ? `Edits locked ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
+                                  ? `Edits locked ${closingInfo.lockDateLabel} at 11:59 PM.`
                                   : "Edits are locked for this challenge."}
                               </span>
                             </div>
@@ -2087,7 +2201,9 @@ export default function DashboardPage() {
                   >
                     <div className="space-y-1">
                       <p className="font-semibold text-slate-900">{submission.name}</p>
-                      <p className="text-sm text-slate-700">Completed {submission.challenge_title}</p>
+                      <p className="text-sm text-slate-700">
+                        Completed <span className="font-semibold text-slate-900">{submission.challenge_title}</span>
+                      </p>
                     </div>
                       <p className="text-xs text-slate-500">{formatTimestamp(submission.completed_at)}</p>
                     </li>
@@ -2164,7 +2280,6 @@ export default function DashboardPage() {
                               {option.description}
                             </p>
                           </div>
-                          {isActive && <span className="text-xs font-semibold text-white">Selected</span>}
                         </button>
                       );
                     })}

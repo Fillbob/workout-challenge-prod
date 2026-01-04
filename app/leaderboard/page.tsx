@@ -290,7 +290,7 @@ export default function LeaderboardPage() {
   const iconBaseOffset = 40;
   const lineTopBase = 140;
   const lineTop = lineTopBase + (maxStackDepth - 1) * stackGap;
-  const trackHeight = lineTopBase + 80 + (maxStackDepth - 1) * stackGap * 2;
+  const trackHeight = lineTop + 80;
 
   const milestoneValues = useMemo(() => {
     const fractions = [0, 0.25, 0.5, 0.75, 1];
