@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const activityIds: number[] = Array.isArray(payload.activityIds)
     ? payload.activityIds
         .map((id: unknown) => Number(id))
-        .filter((id): id is number => Number.isFinite(id))
+        .filter((id: number): id is number => Number.isFinite(id))
     : [];
 
   if (activityIds.length === 0) {
