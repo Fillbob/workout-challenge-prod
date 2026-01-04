@@ -77,6 +77,12 @@ export function parseIsoDate(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function addOneDay(date: Date) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + 1);
+  return next;
+}
+
 export async function refreshConnectionIfNeeded(connection: StravaConnection) {
   const expiresAt = parseIsoDate(connection.expires_at);
   const shouldRefresh = !expiresAt || expiresAt.getTime() - Date.now() < 10 * 60 * 1000;
@@ -153,7 +159,12 @@ export function activityMatchesChallenge(
 
   const startDate = parseIsoDate(challenge.start_date);
   const endDate = parseIsoDate(challenge.end_date);
-  if ((startDate && activity.occurred_at < startDate) || (endDate && activity.occurred_at > endDate)) {
+  const inclusiveEndDate = endDate ? addOneDay(endDate) : null;
+
+  if (
+    (startDate && activity.occurred_at < startDate) ||
+    (inclusiveEndDate && activity.occurred_at >= inclusiveEndDate)
+  ) {
     return false;
   }
 
@@ -168,7 +179,11 @@ export function activityMatchesChallenge(
     if (!activityType) return false;
 
     const normalizedActivityType = activityType.toLowerCase();
-    const allowedTypes = challenge.activity_types.map((type) => type.toLowerCase());
+    const allowedTypes = challenge.activity_types
+      .flatMap((type) => type.split(","))
+      .map((type) => type.trim().toLowerCase())
+      .filter(Boolean);
+
     if (!allowedTypes.includes(normalizedActivityType)) return false;
   }
 
