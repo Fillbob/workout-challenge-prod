@@ -381,6 +381,9 @@ export default function DashboardPage() {
   const [stravaLoading, setStravaLoading] = useState(false);
   const [hasReadQueryParams, setHasReadQueryParams] = useState(false);
   const [expandedChallenges, setExpandedChallenges] = useState<Set<string>>(new Set());
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<number>>(new Set());
+  const [removalStatus, setRemovalStatus] = useState<string | null>(null);
+  const [removalLoading, setRemovalLoading] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
 
@@ -600,6 +603,47 @@ export default function DashboardPage() {
     },
     [loadActivityDetails, supabase],
   );
+
+  const toggleActivitySelection = useCallback((activityId: number, checked: boolean) => {
+    setSelectedActivityIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(activityId);
+      } else {
+        next.delete(activityId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleRemoveActivities = useCallback(async () => {
+    if (!userId || selectedActivityIds.size === 0 || removalLoading) return;
+    setRemovalStatus(null);
+    setRemovalLoading(true);
+
+    try {
+      const response = await fetch("/api/strava/remove-activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityIds: Array.from(selectedActivityIds) }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to remove activities");
+      }
+
+      setRemovalStatus(payload.message ?? "Activities removed");
+      setSelectedActivityIds(new Set());
+      await loadSubmissionProgress(userId);
+      await loadSubmissions(userId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to remove activities";
+      setRemovalStatus(message);
+    } finally {
+      setRemovalLoading(false);
+    }
+  }, [loadSubmissionProgress, loadSubmissions, removalLoading, selectedActivityIds, userId]);
 
   const loadAnnouncements = useCallback(async () => {
     try {
@@ -1162,6 +1206,7 @@ export default function DashboardPage() {
         autoCompleted: boolean;
         entries: Array<{
           id: string;
+          activityId: number | null;
           value: number | null;
           unit: string | null;
           occurredAt: string | null;
@@ -1232,6 +1277,7 @@ export default function DashboardPage() {
 
         return {
           id: entry.activity_id ? String(entry.activity_id) : `${challenge.id}-entry-${index}`,
+          activityId: entry.activity_id ? Number(entry.activity_id) : null,
           value: entry.progress_value,
           unit,
           occurredAt,
@@ -1849,14 +1895,14 @@ export default function DashboardPage() {
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                         <span
-                        className={`rounded-full border px-2 py-1 ${
-                          closingInfo.isEditable
-                            ? "border-orange-200 bg-orange-100 text-orange-700"
-                            : "border-slate-200 bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {closingInfo.closingLabel}
-                      </span>
+                          className={`rounded-full border px-2 py-1 ${
+                            closingInfo.isEditable
+                              ? "border-orange-200 bg-orange-100 text-orange-700"
+                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {closingInfo.closingLabel}
+                        </span>
                         <span className="text-slate-500">{statusDetail}</span>
                         {autoLocked && (
                           <span className="rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700">Auto-completed from Strava</span>
@@ -1869,7 +1915,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="h-2 w-full rounded-full bg-white/70 shadow-inner shadow-orange-100">
                           <div
-                            className="h-2 rounded-full bg-orange-500 transition-all"
+                            className={`h-2 rounded-full transition-all ${progressPercent >= 100 ? "bg-green-500" : "bg-orange-500"}`}
                             style={{ width: `${progressPercent}%` }}
                             aria-label={`Progress for ${challenge.title}`}
                           />
@@ -1943,27 +1989,63 @@ export default function DashboardPage() {
 
                                     return (
                                       <li key={entry.id} className="px-3 py-2 text-slate-700">
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="space-y-0.5">
-                                            <p className="text-sm font-semibold text-slate-900">
-                                              {entry.activityType || entry.name || "Submission"}
-                                            </p>
-                                            {entry.name && (
-                                              <p className="text-xs text-slate-600">{entry.name}</p>
-                                            )}
-                                            <p className="text-[11px] text-slate-500">{dateLabel || "Date unavailable"}</p>
-                                          </div>
-                                          <div className="text-right">
-                                            <p className="text-sm font-semibold text-slate-900">{valueLabel}</p>
-                                            {durationLabel && (
-                                              <p className="text-[11px] text-slate-600">Time: {durationLabel}</p>
-                                            )}
+                                        <div className="flex items-start gap-3">
+                                          <input
+                                            type="checkbox"
+                                            aria-label={`Remove ${entry.name ?? "activity"}`}
+                                            disabled={!entry.activityId}
+                                            checked={entry.activityId ? selectedActivityIds.has(entry.activityId) : false}
+                                            onChange={(event) =>
+                                              entry.activityId &&
+                                              toggleActivitySelection(entry.activityId, event.currentTarget.checked)
+                                            }
+                                            className="mt-1 h-4 w-4 cursor-pointer rounded border-orange-200 text-orange-600 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+                                          />
+                                          <div className="flex w-full items-start justify-between gap-3">
+                                            <div className="space-y-0.5">
+                                              <p className="text-sm font-semibold text-slate-900">
+                                                {entry.activityType || entry.name || "Submission"}
+                                              </p>
+                                              {entry.name && (
+                                                <p className="text-xs text-slate-600">{entry.name}</p>
+                                              )}
+                                              <p className="text-[11px] text-slate-500">{dateLabel || "Date unavailable"}</p>
+                                              {!entry.activityId && (
+                                                <p className="text-[11px] text-slate-500">Manual entry</p>
+                                              )}
+                                            </div>
+                                            <div className="text-right">
+                                              <p className="text-sm font-semibold text-slate-900">{valueLabel}</p>
+                                              {durationLabel && (
+                                                <p className="text-[11px] text-slate-600">Time: {durationLabel}</p>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       </li>
                                     );
                                   })}
                                 </ul>
+                              )}
+                              {challengeEntries.length > 0 && (
+                                <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-[11px] text-slate-600">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={selectedActivityIds.size === 0 || removalLoading}
+                                      onClick={handleRemoveActivities}
+                                      className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                                        selectedActivityIds.size === 0 || removalLoading
+                                          ? "cursor-not-allowed bg-slate-200 text-slate-500"
+                                          : "bg-rose-600 text-white hover:bg-rose-700"
+                                      }`}
+                                    >
+                                      {removalLoading ? "Removing..." : "Remove activities"}
+                                    </button>
+                                    <span>{selectedActivityIds.size} selected</span>
+                                  </div>
+                                  {removalStatus && <span className="text-[11px] text-slate-500">{removalStatus}</span>}
+                                </div>
                               )}
                             </div>
                           )}
@@ -2088,7 +2170,9 @@ export default function DashboardPage() {
                   >
                     <div className="space-y-1">
                       <p className="font-semibold text-slate-900">{submission.name}</p>
-                      <p className="text-sm text-slate-700">Completed {submission.challenge_title}</p>
+                      <p className="text-sm text-slate-700">
+                        Completed <span className="font-semibold text-slate-900">{submission.challenge_title}</span>
+                      </p>
                     </div>
                       <p className="text-xs text-slate-500">{formatTimestamp(submission.completed_at)}</p>
                     </li>

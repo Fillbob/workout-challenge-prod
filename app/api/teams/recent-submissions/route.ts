@@ -89,12 +89,15 @@ export async function GET(request: Request) {
 
   const submissions = (data ?? []).map((row) => {
     const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    const challengeTitle = Array.isArray(row.challenges)
+      ? row.challenges?.[0]?.title
+      : (row as { challenges?: { title?: string } }).challenges?.title;
 
     return {
       id: row.id,
       user_id: row.user_id,
       challenge_id: row.challenge_id,
-      challenge_title: row.challenges?.[0]?.title ?? "",
+      challenge_title: challengeTitle ?? "Challenge",
       completed_at: row.completed_at,
       name: profile?.display_name ?? "Member",
     };
