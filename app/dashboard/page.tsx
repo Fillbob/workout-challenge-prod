@@ -119,7 +119,7 @@ interface ChallengeClosingInfo {
 }
 
 const MILLISECONDS_IN_DAY = 1000 * 60 * 60 * 24;
-const EDIT_GRACE_PERIOD_DAYS = 2;
+const EDIT_GRACE_PERIOD_DAYS = 0;
 const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
   isEditable: true,
   isLocked: false,
@@ -150,15 +150,29 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function startBoundary(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 1, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
 function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClosingInfo {
   const startDate = parseDateSafe(challenge.start_date);
   const endDate = parseDateSafe(challenge.end_date);
+  const startAt = startDate ? startBoundary(startDate) : null;
+  const lockDate = endDate ? endOfDay(addDays(endDate, EDIT_GRACE_PERIOD_DAYS)) : null;
   const startDateLabel = startDate
     ? startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })
     : null;
 
-  if (startDate && now < startDate) {
-    const timeUntilStart = startDate.getTime() - now.getTime();
+  if (startAt && now < startAt) {
+    const timeUntilStart = startAt.getTime() - now.getTime();
     const daysUntilStart = Math.max(0, Math.ceil(timeUntilStart / MILLISECONDS_IN_DAY));
 
     return {
@@ -187,16 +201,33 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
     };
   }
 
-  const lockDate = addDays(endDate, EDIT_GRACE_PERIOD_DAYS);
+  if (!lockDate) {
+    return {
+      isEditable: true,
+      isLocked: false,
+      isUpcoming: false,
+      closingLabel: "Closing date not set",
+      lockDateLabel: null,
+      startDateLabel,
+      daysUntilClose: null,
+    };
+  }
+
   const isLocked = now > lockDate;
   const timeRemaining = lockDate.getTime() - now.getTime();
   const daysUntilClose = Math.max(0, Math.ceil(timeRemaining / MILLISECONDS_IN_DAY));
+  const closingLabel =
+    timeRemaining >= 0
+      ? daysUntilClose === 0
+        ? "Closes today at 11:59 PM"
+        : `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}`
+      : "Closed";
 
   return {
     isEditable: timeRemaining >= 0,
     isLocked,
     isUpcoming: false,
-    closingLabel: timeRemaining >= 0 ? `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}` : "Closed",
+    closingLabel,
     lockDateLabel: lockDate.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     startDateLabel,
     daysUntilClose,
@@ -1845,8 +1876,8 @@ export default function DashboardPage() {
                     : "This challenge hasn't started yet."
                   : closingInfo.isEditable
                     ? closingInfo.lockDateLabel
-                      ? `Edits lock ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
-                      : `Edits lock ${EDIT_GRACE_PERIOD_DAYS} days after the end date.`
+                      ? `Edits lock ${closingInfo.lockDateLabel} at 11:59 PM.`
+                      : "Edits lock at the end of the day."
                     : "Edits are locked for this challenge.";
 
                 return (
@@ -1915,7 +1946,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="h-2 w-full rounded-full bg-white/70 shadow-inner shadow-orange-100">
                           <div
-                            className={`h-2 rounded-full transition-all ${progressPercent >= 100 ? "bg-green-500" : "bg-orange-500"}`}
+                            className={`h-2 rounded-full transition-all ${progressPercent >= 100 ? "bg-emerald-500" : "bg-orange-500"}`}
                             style={{ width: `${progressPercent}%` }}
                             aria-label={`Progress for ${challenge.title}`}
                           />
@@ -2127,7 +2158,7 @@ export default function DashboardPage() {
                               </span>
                               <span className="text-slate-500">
                                 {closingInfo.lockDateLabel
-                                  ? `Edits locked ${closingInfo.lockDateLabel} (${EDIT_GRACE_PERIOD_DAYS} days after end date).`
+                                  ? `Edits locked ${closingInfo.lockDateLabel} at 11:59 PM.`
                                   : "Edits are locked for this challenge."}
                               </span>
                             </div>
@@ -2249,7 +2280,6 @@ export default function DashboardPage() {
                               {option.description}
                             </p>
                           </div>
-                          {isActive && <span className="text-xs font-semibold text-white">Selected</span>}
                         </button>
                       );
                     })}
