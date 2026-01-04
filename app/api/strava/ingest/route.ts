@@ -76,6 +76,10 @@ function normalizeSchemaError(error: unknown, context: string, syncContext?: Syn
     return `${context}: missing strava_sync_state table. Apply the latest SQL migration to Supabase and reload the schema cache.`;
   }
 
+  if (message.includes("strava_sync_state.sync_in_progress")) {
+    return `${context}: missing sync_in_progress column on strava_sync_state. Apply sql/20241014_strava_sync_state_columns.sql to Supabase and reload the schema cache.`;
+  }
+
   return `${context}: ${message}`;
 }
 
@@ -410,7 +414,7 @@ async function syncConnection({
   const existingProgressTotals = await loadExistingProgress(syncContext, refreshed.user_id, challengeIds);
   const existingSubmissions = await loadExistingCompletion(refreshed.user_id, challengeIds);
 
-  const lastActivityAt = parseIsoDate(syncState?.last_activity_at ?? undefined);
+  const lastActivityAt = parseIsoDate(syncState?.last_activity_at ?? connection.last_synced_at ?? undefined);
   const window = computeSyncWindow({
     mode,
     now,
@@ -556,7 +560,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No Strava connection found" }, { status: 403 });
       }
     }
-    const mode: SyncMode = isSecretAuthorized ? "incremental" : "window";
+    const mode: SyncMode = "incremental";
 
     for (const connection of connections) {
       const startedAt = new Date();
@@ -572,7 +576,7 @@ export async function POST(request: Request) {
             mode,
             now: new Date(),
             challenges,
-            lastActivityAt: parseIsoDate(syncState?.last_activity_at ?? undefined),
+            lastActivityAt: parseIsoDate(syncState?.last_activity_at ?? connection.last_synced_at ?? undefined),
           });
           const result: StravaSyncResult = {
             userId: connection.user_id,
