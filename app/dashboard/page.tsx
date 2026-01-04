@@ -1931,7 +1931,8 @@ export default function DashboardPage() {
                                     const formatEntryValue = (entryValue: number | null, unitLabel: string | null) => {
                                       if (entryValue === null || Number.isNaN(entryValue)) return "N/A";
                                       if (challenge.metric_type === "distance") {
-                                        return `${formatMiles(entryValue, 3)}${unitLabel ? ` ${unitLabel}` : ""}`;
+                                        const valueMiles = unitLabel === "mi" ? entryValue : metersToMiles(entryValue);
+                                        return `${formatMiles(valueMiles, 3)}${unitLabel ? ` ${unitLabel}` : ""}`;
                                       }
                                       return `${Number(entryValue).toLocaleString(undefined, {
                                         maximumFractionDigits: 3,
