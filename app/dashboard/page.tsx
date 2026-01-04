@@ -137,8 +137,16 @@ function clampPercent(value: number | null) {
   return Math.min(100, Math.max(0, Math.round(value)));
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 function parseDateSafe(value: string | null): Date | null {
   if (!value) return null;
+
+  if (DATE_ONLY_PATTERN.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
