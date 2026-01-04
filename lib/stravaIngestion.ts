@@ -50,10 +50,7 @@ export type NormalizedActivity = {
 export type StravaSyncResult = {
   userId: string;
   athleteId?: number | null;
-  windowAfter: Date;
-  windowBefore?: Date | null;
-  mode: SyncMode;
-  cursorSource: CursorSource;
+  since: Date;
   fetchedActivities: number;
   processedActivities: number;
   matchedActivities: number;
@@ -69,16 +66,10 @@ export type StravaSyncResult = {
     steps?: number;
   }>;
   lastSyncedAt: string;
-  warnings?: string[];
 };
 
 const STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities";
 const INGESTION_LOOKBACK_DAYS = 30;
-const INCREMENTAL_LOOKBACK_MINUTES = 5;
-const STRAVA_PAGE_SIZE = 50;
-
-export type SyncMode = "window" | "incremental";
-export type CursorSource = "week_start" | "challenge_start" | "last_activity_at" | "fallback_30d";
 
 export function parseIsoDate(value: string | null | undefined) {
   if (!value) return null;
@@ -140,37 +131,22 @@ export function normalizeActivity(activity: StravaActivity): NormalizedActivity 
   };
 }
 
-export async function fetchRecentActivities(
-  connection: StravaConnection,
-  window?: { after?: Date; before?: Date | null },
-) {
-  const afterParam = window?.after ? Math.floor(window.after.getTime() / 1000) : undefined;
-  const beforeParam = window?.before ? Math.floor(window.before.getTime() / 1000) : undefined;
-  const activities: NormalizedActivity[] = [];
+export async function fetchRecentActivities(connection: StravaConnection, since?: Date) {
+  const afterParam = since ? Math.floor(since.getTime() / 1000) : undefined;
+  const params = new URLSearchParams({ per_page: "50" });
+  if (afterParam) params.set("after", `${afterParam}`);
 
-  let page = 1;
-  while (true) {
-    const params = new URLSearchParams({ per_page: `${STRAVA_PAGE_SIZE}`, page: `${page}` });
-    if (afterParam) params.set("after", `${afterParam}`);
-    if (beforeParam) params.set("before", `${beforeParam}`);
+  const response = await fetch(`${STRAVA_ACTIVITIES_URL}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${connection.access_token}` },
+  });
 
-    const response = await fetch(`${STRAVA_ACTIVITIES_URL}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${connection.access_token}` },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to load Strava activities: ${response.status} ${errorText}`);
-    }
-
-    const payload = (await response.json()) as StravaActivity[];
-    activities.push(...payload.map(normalizeActivity));
-
-    if (payload.length < STRAVA_PAGE_SIZE) break;
-    page += 1;
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to load Strava activities: ${response.status} ${errorText}`);
   }
 
-  return activities;
+  const payload = (await response.json()) as StravaActivity[];
+  return payload.map(normalizeActivity);
 }
 
 export function activityMatchesChallenge(
@@ -283,71 +259,6 @@ export function getDefaultSinceDate(lastSyncedAt?: string | null) {
   const parsedLast = parseIsoDate(lastSyncedAt ?? undefined);
   if (parsedLast) return parsedLast;
   return fallback;
-}
-
-function startOfCurrentWeek(now: Date) {
-  const day = now.getUTCDay();
-  const diffToMonday = (day + 6) % 7; // Monday as start of week
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  start.setUTCDate(start.getUTCDate() - diffToMonday);
-  return start;
-}
-
-function endOfWeek(start: Date) {
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 7);
-  return end;
-}
-
-function earliestDate(dates: Date[]) {
-  return dates.reduce((earliest, current) => (current < earliest ? current : earliest), dates[0]);
-}
-
-export function computeSyncWindow({
-  mode,
-  now,
-  challenges,
-  lastActivityAt,
-}: {
-  mode: SyncMode;
-  now: Date;
-  challenges: ChallengeRow[];
-  lastActivityAt?: Date | null;
-}): { after: Date; before?: Date | null; cursorSource: CursorSource } {
-  if (mode === "incremental") {
-    const afterBase = lastActivityAt ?? getDefaultSinceDate(null);
-    const buffered = new Date(afterBase);
-    buffered.setMinutes(buffered.getMinutes() - INCREMENTAL_LOOKBACK_MINUTES);
-    return { after: buffered, before: null, cursorSource: lastActivityAt ? "last_activity_at" : "fallback_30d" };
-  }
-
-  const weekStart = startOfCurrentWeek(now);
-  const weekEnd = endOfWeek(weekStart);
-  const challengeStarts = challenges
-    .map((challenge) => parseIsoDate(challenge.start_date))
-    .filter((date): date is Date => Boolean(date));
-  const challengeEnds = challenges
-    .map((challenge) => {
-      const end = parseIsoDate(challenge.end_date);
-      return end ? addOneDay(end) : null;
-    })
-    .filter((date): date is Date => Boolean(date));
-
-  const windowCandidates = challengeStarts.map((start) => (start > weekStart ? start : weekStart));
-  const after = windowCandidates.length > 0 ? earliestDate(windowCandidates) : weekStart;
-
-  const beforeCandidates: Date[] = [];
-  beforeCandidates.push(weekEnd);
-  if (challengeEnds.length > 0) {
-    beforeCandidates.push(earliestDate(challengeEnds));
-  }
-  const cursorSource: CursorSource = after > weekStart ? "challenge_start" : "week_start";
-  const before = earliestDate(beforeCandidates);
-  if (before <= after) {
-    return { after, before: null, cursorSource };
-  }
-
-  return { after, before, cursorSource };
 }
 
 export type SyncContext = {
