@@ -5,6 +5,7 @@ import { Announcement, listAnnouncements } from "@/lib/announcements";
 import { useRequireUser } from "@/lib/auth";
 import { profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { formatMiles, metersToMiles } from "@/lib/units";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
@@ -141,23 +142,6 @@ function parseDateSafe(value: string | null): Date | null {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function convertDistanceToMiles(value: number | null, unit: string | null) {
-  if (value === null || Number.isNaN(value)) return value;
-
-  const normalizedUnit = unit?.toLowerCase().trim();
-  if (!normalizedUnit) return value;
-
-  if (normalizedUnit.includes("meter")) {
-    return value / 1609.34;
-  }
-
-  if (normalizedUnit.includes("kilometer") || normalizedUnit.includes("km")) {
-    return value * 0.621371;
-  }
-
-  return value;
 }
 
 function addDays(date: Date, days: number) {
@@ -1214,25 +1198,26 @@ export default function DashboardPage() {
         return latest;
       }, null);
       const rawPercent = typeof submission?.progress_percent === "number" ? submission.progress_percent : null;
-      const value =
+      const valueMeters =
         aggregatedValue !== null
           ? aggregatedValue
           : typeof submission?.progress_value === "number"
             ? submission.progress_value
             : null;
-      const target =
+      const targetMeters =
         typeof submission?.progress_target === "number"
           ? submission.progress_target
           : typeof challenge.target_value === "number"
             ? challenge.target_value
             : null;
-      const hasTarget = typeof target === "number" && target > 0;
-      const derivedPercent = rawPercent ?? (hasTarget && typeof value === "number" ? (value / target) * 100 : null);
+      const hasTarget = typeof targetMeters === "number" && targetMeters > 0;
+      const derivedPercent =
+        rawPercent ?? (hasTarget && typeof valueMeters === "number" ? (valueMeters / targetMeters) * 100 : null);
       const percent = clampPercent(derivedPercent ?? (submission?.completed ? 100 : 0));
-      const hasData = rawPercent !== null || windowedEntries.length > 0 || (hasTarget && typeof value === "number");
+      const hasData = rawPercent !== null || windowedEntries.length > 0 || (hasTarget && typeof valueMeters === "number");
       let displayUnit = unit;
-      let displayValue = value;
-      let displayTarget = target;
+      let displayValue: number | null = valueMeters;
+      let displayTarget: number | null = targetMeters;
 
       let entries = windowedEntries.map((entry, index) => {
         const activity = entry.activity_id ? activityDetails[entry.activity_id] : undefined;
@@ -1255,21 +1240,34 @@ export default function DashboardPage() {
         };
       });
 
-      if (challenge.metric_type === "distance" && unit) {
-        displayUnit = "miles";
-        displayValue = convertDistanceToMiles(displayValue, unit);
-        displayTarget = convertDistanceToMiles(displayTarget, unit);
+      if (challenge.metric_type === "distance") {
+        displayUnit = "mi";
+        displayValue = typeof valueMeters === "number" ? metersToMiles(valueMeters) : null;
+        displayTarget = typeof targetMeters === "number" ? metersToMiles(targetMeters) : null;
         entries = entries.map((entry) => ({
           ...entry,
-          value: convertDistanceToMiles(entry.value, unit),
-          unit: "miles",
+          value: typeof entry.value === "number" ? metersToMiles(entry.value) : entry.value,
+          unit: "mi",
         }));
       }
 
+      const formattedValue =
+        displayValue === null
+          ? null
+          : challenge.metric_type === "distance"
+            ? formatMiles(displayValue)
+            : displayValue.toLocaleString();
+      const formattedTarget =
+        displayTarget === null
+          ? null
+          : challenge.metric_type === "distance"
+            ? formatMiles(displayTarget)
+            : displayTarget.toLocaleString();
+
       const label =
-        displayValue !== null
-          ? `${displayValue.toLocaleString()}${displayUnit ? ` ${displayUnit}` : ""}${
-              hasTarget ? ` of ${displayTarget?.toLocaleString()}${displayUnit ? ` ${displayUnit}` : ""}` : ""
+        formattedValue !== null
+          ? `${formattedValue}${displayUnit ? ` ${displayUnit}` : ""}${
+              hasTarget ? ` of ${formattedTarget ?? ""}${displayUnit ? ` ${displayUnit}` : ""}` : ""
             }`
           : null;
       const updatedAt =
@@ -1930,12 +1928,17 @@ export default function DashboardPage() {
                                   {challengeEntries.map((entry) => {
                                     const durationLabel = formatDuration(entry.movingTime);
                                     const dateLabel = formatTimestamp(entry.occurredAt);
-                                    const valueLabel =
-                                      entry.value === null
-                                        ? "N/A"
-                                        : `${Number(entry.value).toLocaleString(undefined, {
-                                            maximumFractionDigits: 3,
-                                          })}${entry.unit ? ` ${entry.unit}` : ""}`;
+                                    const formatEntryValue = (entryValue: number | null, unitLabel: string | null) => {
+                                      if (entryValue === null || Number.isNaN(entryValue)) return "N/A";
+                                      if (challenge.metric_type === "distance") {
+                                        const valueMiles = unitLabel === "mi" ? entryValue : metersToMiles(entryValue);
+                                        return `${formatMiles(valueMiles, 3)}${unitLabel ? ` ${unitLabel}` : ""}`;
+                                      }
+                                      return `${Number(entryValue).toLocaleString(undefined, {
+                                        maximumFractionDigits: 3,
+                                      })}${unitLabel ? ` ${unitLabel}` : ""}`;
+                                    };
+                                    const valueLabel = formatEntryValue(entry.value, entry.unit);
 
                                     return (
                                       <li key={entry.id} className="px-3 py-2 text-slate-700">

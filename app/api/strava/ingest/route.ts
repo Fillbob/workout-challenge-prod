@@ -296,7 +296,7 @@ async function syncConnection(connection: StravaConnection, challenges: Challeng
     name: activity.raw.name,
     type: activity.raw.type,
     occurred_at: activity.occurred_at.toISOString(),
-    distance: activity.metrics.distance,
+    distance_meters: activity.metrics.distance_meters,
     moving_time: activity.metrics.moving_time,
     steps: activity.metrics.steps,
   }));

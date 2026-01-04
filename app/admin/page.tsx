@@ -10,6 +10,7 @@ import {
 } from "@/lib/announcements";
 import { useRequireAdmin } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { milesToMeters } from "@/lib/units";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
@@ -88,22 +89,25 @@ export default function AdminPage() {
   const normalizeTargetForDistance = (form: typeof emptyForm) => {
     const parsedValue = Number.isFinite(form.target_value ?? NaN) ? form.target_value : null;
     const targetUnit = form.target_unit ?? null;
-    const progressUnit = form.progress_unit ?? targetUnit ?? null;
+    const progressUnit = "meters";
 
     if (form.metric_type !== "distance" || parsedValue === null) {
       return { target_value: parsedValue, target_unit: targetUnit, progress_unit: progressUnit };
     }
 
     const normalizedUnit = targetUnit?.toLowerCase().trim() ?? "";
-    const expectsMiles = normalizedUnit.includes("mile");
+    const expectsMiles = !normalizedUnit || normalizedUnit.includes("mile");
+    const expectsKilometers = normalizedUnit.includes("kilometer") || normalizedUnit.includes("km");
 
-    if (!expectsMiles) {
-      return { target_value: parsedValue, target_unit: targetUnit ?? "meters", progress_unit: progressUnit };
+    if (expectsMiles) {
+      return { target_value: milesToMeters(parsedValue), target_unit: "meters", progress_unit: progressUnit };
     }
 
-    const meters = parsedValue * 1609.34;
+    if (expectsKilometers) {
+      return { target_value: parsedValue * 1000, target_unit: "meters", progress_unit: progressUnit };
+    }
 
-    return { target_value: meters, target_unit: "meters", progress_unit: progressUnit };
+    return { target_value: parsedValue, target_unit: "meters", progress_unit: progressUnit };
   };
 
   const loadChallenges = useCallback(async () => {

@@ -38,7 +38,8 @@ export type NormalizedActivity = {
   id: number;
   occurred_at: Date;
   metrics: {
-    distance?: number;
+    /** Strava reports meters; keep canonical storage in meters for downstream calculations. */
+    distance_meters?: number;
     moving_time?: number;
     elevation?: number;
     steps?: number;
@@ -60,7 +61,7 @@ export type StravaSyncResult = {
     name: string;
     type?: string;
     occurred_at: string;
-    distance?: number;
+    distance_meters?: number;
     moving_time?: number;
     steps?: number;
   }>;
@@ -115,7 +116,7 @@ export function normalizeActivity(activity: StravaActivity): NormalizedActivity 
     id: activity.id,
     occurred_at: occurredAt,
     metrics: {
-      distance: activity.distance ?? undefined,
+      distance_meters: activity.distance ?? undefined,
       moving_time: activity.moving_time ?? undefined,
       elevation: activity.total_elevation_gain ?? undefined,
       steps: activity.steps ?? undefined,
@@ -178,7 +179,7 @@ export function activityMatchesChallenge(
 export function selectMetricValue(activity: NormalizedActivity, metricType: string) {
   switch (metricType) {
     case "distance":
-      return activity.metrics.distance;
+      return activity.metrics.distance_meters;
     case "moving_time":
     case "duration":
       return activity.metrics.moving_time;
@@ -196,27 +197,15 @@ export function normalizeMetricValueForChallenge(activity: NormalizedActivity, c
   if (typeof rawMetricValue !== "number" || Number.isNaN(rawMetricValue)) return undefined;
 
   if (challenge.metric_type === "distance") {
-    return normalizeDistanceValue(rawMetricValue, challenge.target_unit);
+    return normalizeDistanceValue(rawMetricValue);
   }
 
   return rawMetricValue;
 }
 
-function normalizeDistanceValue(distance: number, targetUnit?: string | null) {
-  const unit = targetUnit?.toLowerCase().trim();
-
-  if (!unit) return distance;
-
-  if (unit.includes("mile")) {
-    // Strava distances are reported in meters; convert to miles when the challenge target expects miles.
-    return distance / 1609.34;
-  }
-
-  if (unit.includes("kilometer") || unit.includes("km")) {
-    return distance / 1000;
-  }
-
-  return distance;
+function normalizeDistanceValue(distanceMeters: number) {
+  // Strava delivers meters; keep this as the canonical storage unit.
+  return distanceMeters;
 }
 
 export async function loadActiveChallenges() {
