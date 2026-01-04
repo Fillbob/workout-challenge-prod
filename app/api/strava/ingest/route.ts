@@ -236,7 +236,6 @@ type SyncStateRow = {
   last_activity_at?: string | null;
   sync_in_progress?: boolean | null;
   lock_expires_at?: string | null;
-  locked_at?: string | null;
 };
 
 async function ensureSyncState(syncContext: SyncContext, userId: string, athleteId: number | null) {
@@ -259,7 +258,7 @@ async function loadSyncState(syncContext: SyncContext, userId: string) {
   const admin = getServiceRoleClient();
   const { data, error } = await admin
     .from("strava_sync_state")
-    .select("last_activity_at, sync_in_progress, lock_expires_at, locked_at")
+    .select("last_activity_at, sync_in_progress, lock_expires_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -281,15 +280,11 @@ async function acquireSyncLock(syncContext: SyncContext, userId: string, athlete
   const nowIso = now.toISOString();
   const expirationIso = expiration.toISOString();
 
-  const state = await loadSyncState(syncContext, userId);
-  if (state?.sync_in_progress && state.lock_expires_at && new Date(state.lock_expires_at) > now) {
-    return false;
-  }
-
   const { data, error } = await admin
     .from("strava_sync_state")
     .update({ sync_in_progress: true, lock_expires_at: expirationIso, locked_at: nowIso, athlete_id: athleteId })
     .eq("user_id", userId)
+    .or(`sync_in_progress.is.false,sync_in_progress.is.null,lock_expires_at.is.null,lock_expires_at.lt.${nowIso}`)
     .select("user_id")
     .maybeSingle();
 
