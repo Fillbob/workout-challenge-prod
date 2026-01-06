@@ -6,6 +6,7 @@ import { useRequireUser } from "@/lib/auth";
 import { profileIconOptions } from "@/lib/profileIcons";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { formatMiles, metersToMiles } from "@/lib/units";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
@@ -402,6 +403,7 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
+  const [announcementsExpanded, setAnnouncementsExpanded] = useState(false);
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState<string | null>(null);
@@ -429,6 +431,13 @@ export default function DashboardPage() {
   useEffect(() => {
     setCurrentTime(new Date());
   }, []);
+
+  const visibleAnnouncements = useMemo(
+    () => (announcementsExpanded ? announcements : announcements.slice(0, 1)),
+    [announcementsExpanded, announcements],
+  );
+
+  const hasOlderAnnouncements = announcements.length > 1;
 
   const handleActiveTeamChange = useCallback((teamId: string) => {
     setActiveTeamId(teamId);
@@ -1734,30 +1743,45 @@ export default function DashboardPage() {
                 <h2 className="text-2xl font-semibold text-slate-900">Announcements</h2>
                 <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
               </div>
-              {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
+              <div className="flex items-center gap-2">
+                {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
+                {hasOlderAnnouncements && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-xs font-semibold text-orange-700 shadow-sm transition hover:bg-white"
+                    aria-expanded={announcementsExpanded}
+                    onClick={() => setAnnouncementsExpanded((prev) => !prev)}
+                  >
+                    {announcementsExpanded ? "Hide earlier" : "Show earlier"}
+                    {announcementsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                )}
+              </div>
             </div>
             {announcements.length === 0 ? (
               <p className="text-sm text-slate-500">No announcements yet.</p>
             ) : (
-              <ul className="space-y-3">
-                {announcements.map((announcement) => (
-                  <li
-                    key={announcement.id}
-                    className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
-                  >
-                  <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-orange-700">{announcement.author_name}</p>
-                      <p>{new Date(announcement.created_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
-                  <div className="prose max-w-none text-sm text-slate-800">
-                    <AnnouncementMarkdown content={announcement.body_md} className="max-w-none" />
-                  </div>
-                </li>
-              ))}
-              </ul>
+              <div className={announcementsExpanded ? "max-h-96 overflow-y-auto pr-1" : undefined}>
+                <ul className="space-y-3">
+                  {visibleAnnouncements.map((announcement) => (
+                    <li
+                      key={announcement.id}
+                      className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-orange-700">{announcement.author_name}</p>
+                          <p>{new Date(announcement.created_at).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <h3 className="mt-2 text-lg font-semibold text-slate-900">{announcement.title}</h3>
+                      <div className="prose max-w-none text-sm text-slate-800">
+                        <AnnouncementMarkdown content={announcement.body_md} className="max-w-none" />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </section>
