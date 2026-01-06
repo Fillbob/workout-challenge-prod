@@ -15,6 +15,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
 
+const commonActivityTypes = [
+  "Run",
+  "Ride",
+  "Walk",
+  "Hike",
+  "Swim",
+  "Rowing",
+  "Weight Training",
+  "Yoga",
+  "Elliptical",
+  "Virtual Ride",
+];
+
 interface Challenge {
   id: string;
   week_index: number;
@@ -72,7 +85,6 @@ export default function AdminPage() {
   const [role, setRole] = useState<string | null>(null);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [form, setForm] = useState(emptyForm);
-  const [activityTypesInput, setActivityTypesInput] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [teams, setTeams] = useState<AdminTeam[]>([]);
@@ -183,7 +195,6 @@ export default function AdminPage() {
 
   const resetForm = () => {
     setForm(emptyForm);
-    setActivityTypesInput("");
     setEditingId(null);
   };
 
@@ -440,7 +451,6 @@ export default function AdminPage() {
 
   const startEditing = (challenge: Challenge) => {
     setEditingId(challenge.id);
-    setActivityTypesInput((challenge.activity_types ?? []).join(", "));
     setForm({
       week_index: challenge.week_index,
       challenge_index: challenge.challenge_index ?? 1,
@@ -467,6 +477,17 @@ export default function AdminPage() {
         : [...existing, teamId];
 
       return { ...prev, team_ids: nextTeams };
+    });
+  };
+
+  const toggleActivityType = (activityType: string) => {
+    setForm((prev) => {
+      const existing = prev.activity_types ?? [];
+      const nextActivities = existing.includes(activityType)
+        ? existing.filter((type) => type !== activityType)
+        : [...existing, activityType];
+
+      return { ...prev, activity_types: nextActivities };
     });
   };
 
@@ -767,28 +788,54 @@ export default function AdminPage() {
                   />
                   <p className="text-xs text-slate-500">Shown for context alongside numeric goals.</p>
                 </label>
-                <label className="space-y-2 text-sm md:col-span-2">
+                <div className="space-y-2 text-sm md:col-span-2">
                   <span className="text-slate-300">Allowed Strava activity types (optional)</span>
-                  <input
-                    value={activityTypesInput}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setActivityTypesInput(value);
-                      setForm({
-                        ...form,
-                        activity_types: value
-                          .split(",")
-                          .map((item) => item.trim())
-                          .filter(Boolean),
-                      });
-                    }}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
-                    placeholder="Comma-separated list (e.g. Run, Walk, Ride)"
-                  />
+                  <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+                    {commonActivityTypes.map((activityType) => {
+                      const selected = (form.activity_types ?? []).includes(activityType);
+                      return (
+                        <label
+                          key={activityType}
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition ${
+                            selected ? "border-indigo-500 bg-indigo-500/10" : "border-slate-700 bg-slate-800"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleActivityType(activityType)}
+                            className="h-4 w-4 rounded border-slate-600 bg-slate-700 text-indigo-500"
+                          />
+                          <span className="text-slate-200">{activityType}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {form.activity_types?.some((type) => !commonActivityTypes.includes(type)) && (
+                    <div className="rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-100">
+                      <p className="font-semibold">Custom activity types already set</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(form.activity_types ?? [])
+                          .filter((type) => !commonActivityTypes.includes(type))
+                          .map((type) => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => toggleActivityType(type)}
+                              className="group flex items-center gap-1 rounded-full border border-amber-400/60 px-2 py-1 text-amber-100 transition hover:bg-amber-500/20"
+                            >
+                              <span>{type}</span>
+                              <span className="text-amber-200 group-hover:text-amber-50">×</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                   <p className="text-xs text-slate-500">
-                    Leave empty to accept all activity types from Strava or non-Strava submissions.
+                    Select the Strava activities participants can submit. Leave all unchecked to accept any
+                    activity type from Strava or non-Strava submissions.
                   </p>
-                </label>
+                </div>
                 <label className="space-y-2 text-sm md:col-span-2">
                   <span className="text-slate-300">Title</span>
                   <input
