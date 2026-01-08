@@ -36,6 +36,7 @@ type ChallengeRow = {
   week_index: number | null;
   start_date: string | null;
   end_date: string | null;
+  target_value: number | null;
 };
 
 function extractChallenge(relation: ChallengeRelation) {
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
 
   const { data: challengeRows, error: challengeError } = await admin
     .from("challenges")
-    .select("id, team_ids, hidden, base_points, week_index, start_date, end_date");
+    .select("id, team_ids, hidden, base_points, week_index, start_date, end_date, target_value");
 
   if (challengeError) {
     return NextResponse.json({ error: challengeError.message }, { status: 400 });
@@ -231,16 +232,53 @@ export async function GET(request: Request) {
   });
 
   const activeWeekChallengeIds = activeWeekChallenges.map((challenge) => challenge.id);
+  const targetByChallenge = new Map<string, number | null>(
+    activeWeekChallenges.map((challenge) => [challenge.id, challenge.target_value ?? null]),
+  );
+
+  const progressTotalsRows: {
+    user_id: string;
+    challenge_id: string;
+    progress_value: number | null;
+    target_value: number | null;
+  }[] = [];
+  if (activeWeekChallengeIds.length > 0) {
+    const { data, error: progressTotalsError } = await admin
+      .from("submission_progress")
+      .select("user_id, challenge_id, progress_value, target_value")
+      .in("user_id", memberIds)
+      .in("challenge_id", activeWeekChallengeIds);
+
+    if (progressTotalsError) {
+      return NextResponse.json({ error: progressTotalsError.message }, { status: 400 });
+    }
+    progressTotalsRows.push(...((data as typeof progressTotalsRows | null) ?? []));
+  }
+
+  const progressTotals = new Map<string, { total: number; target: number | null }>();
+  progressTotalsRows.forEach((row) => {
+    const key = `${row.user_id}:${row.challenge_id}`;
+    const existing = progressTotals.get(key) ?? { total: 0, target: row.target_value ?? null };
+    const target = existing.target ?? row.target_value ?? targetByChallenge.get(row.challenge_id) ?? null;
+    progressTotals.set(key, {
+      total: existing.total + Number(row.progress_value ?? 0),
+      target,
+    });
+  });
 
   const leaderboardWithWeekProgress = leaderboard.map((row) => {
     if (activeWeekChallengeIds.length === 0) {
       return { ...row, week_progress_percent: 0 };
     }
     const challengeProgress = progressByUser.get(row.user_id);
-    const total = activeWeekChallengeIds.reduce(
-      (sum, challengeId) => sum + (challengeProgress?.get(challengeId) ?? 0),
-      0,
-    );
+    const total = activeWeekChallengeIds.reduce((sum, challengeId) => {
+      const key = `${row.user_id}:${challengeId}`;
+      const totals = progressTotals.get(key);
+      if (totals && typeof totals.target === "number" && totals.target > 0) {
+        return sum + clampPercent((totals.total / totals.target) * 100);
+      }
+      return sum + (challengeProgress?.get(challengeId) ?? 0);
+    }, 0);
     const percent = clampPercent(total / activeWeekChallengeIds.length);
     return { ...row, week_progress_percent: percent };
   });
