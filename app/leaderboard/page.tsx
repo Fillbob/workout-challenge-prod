@@ -307,30 +307,27 @@ export default function LeaderboardPage() {
   const topPerformer = rows[0];
 
   return (
-    <main className="min-h-screen bg-[#FEF3E2] text-slate-900">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
-        <div className="flex flex-col gap-4 rounded-3xl border border-[#FFB22C] bg-[#FEF3E2] p-6 shadow-sm shadow-orange-100/60 sm:flex-row sm:items-center sm:justify-between">
+    <main className="app-shell min-h-screen">
+      <div className="app-panel mx-auto max-w-5xl space-y-4 px-4 py-10 sm:px-8 rounded-[32px]">
+        <div className="app-card app-card-hover flex flex-col gap-4 rounded-3xl p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Leaderboard</p>
-            <h1 className="text-3xl font-semibold text-slate-900">Group rankings</h1>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="app-section-pill">Leaderboard</p>
+            <h1 className="text-3xl font-semibold text-slate-900 leading-tight">Group rankings</h1>
+            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
               Celebrate your squad and follow every contribution in a warm, card-first layout.
             </p>
           </div>
-          <a
-            className="inline-flex items-center justify-center rounded-full bg-[#FA812F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#FFB22C]"
-            href="/dashboard"
-          >
+          <a className="app-button-primary app-focus" href="/dashboard">
             Back to dashboard
           </a>
         </div>
 
         <div className="mt-8 space-y-4">
-          <div className="rounded-3xl border border-[#FFB22C] bg-[#FEF3E2] p-4 shadow-sm shadow-orange-100/70">
+          <div className="app-card app-card-hover rounded-3xl p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-medium text-amber-700">Choose a group</p>
-                <p className="text-xs text-slate-500">Switch tabs to browse each leaderboard.</p>
+                <p className="app-section-pill">Choose a group</p>
+                <p className="text-xs text-slate-500 leading-relaxed">Switch tabs to browse each leaderboard.</p>
               </div>
               <div className="flex flex-wrap gap-3">
                 {teams.map((team) => {
@@ -341,11 +338,7 @@ export default function LeaderboardPage() {
                     <button
                       key={id}
                       onClick={() => handleTeamChange(id)}
-                      className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
-                        isActive
-                          ? "border-transparent bg-[#FA812F] text-white shadow-sm"
-                          : "border-[#FFB22C] bg-[#FEF3E2] text-slate-700 hover:border-[#FFB22C] hover:bg-[#F3C623]"
-                      }`}
+                      className={`app-tab app-focus ${isActive ? "app-tab-active" : ""}`}
                       disabled={teams.length === 0}
                     >
                       {name}
@@ -360,9 +353,9 @@ export default function LeaderboardPage() {
 
           {activeTeam ? (
             <div className="grid gap-6 lg:grid-cols-5">
-              <div className="rounded-3xl border border-[#FFB22C] bg-[#F3C623] p-6 text-slate-900 shadow-sm shadow-orange-200/70 lg:col-span-2">
-                <div className="rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] p-4 shadow-sm shadow-amber-200/40">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">Current leader</p>
+              <div className="app-card app-card-hover rounded-3xl p-6 lg:col-span-2 border-t-4 border-[#FFB22C]">
+                <div className="app-card rounded-2xl p-4">
+                  <p className="app-section-pill">Current leader</p>
                   <div className="mt-3 flex items-center gap-3">
                     <ProfileCircle iconId={topPerformer?.icon} name={topPerformer?.name ?? "Current leader"} size="md" />
                     <div>
@@ -376,13 +369,13 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Participants</p>
+                  <div className="app-card rounded-2xl p-4">
+                    <p className="app-section-pill">Participants</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{rows.length}</p>
                     <p className="text-xs text-amber-900/80">Active group members logged.</p>
                   </div>
-                  <div className="rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Submissions</p>
+                  <div className="app-card rounded-2xl p-4">
+                    <p className="app-section-pill">Submissions</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{activityOffset}</p>
                     <p className="text-xs text-amber-900/80">Loaded contributions so far.</p>
                   </div>
@@ -390,27 +383,27 @@ export default function LeaderboardPage() {
               </div>
 
                 <div className="lg:col-span-3 space-y-4">
-                  <div className="rounded-3xl border border-[#FFB22C] bg-[#FEF3E2] p-5 shadow-sm shadow-orange-100/70">
+                  <div className="app-card app-card-hover rounded-3xl p-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-orange-600">Race view</p>
-                        <h3 className="text-xl font-semibold text-slate-900">Race view</h3>
-                        <p className="text-sm text-slate-600">One shared track that scales with available challenges.</p>
+                        <p className="app-section-pill">Race view</p>
+                        <h3 className="text-xl font-semibold text-slate-900 leading-snug">Race view</h3>
+                        <p className="text-sm text-slate-600 leading-relaxed">One shared track that scales with available challenges.</p>
                       </div>
                       <p className="text-xs text-slate-500">Click an icon to spotlight their lane.</p>
                     </div>
 
                     <div className="mt-4 space-y-4">
-                      <div className="rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] p-4 shadow-sm shadow-orange-50">
+                      <div className="app-card rounded-2xl p-4">
                         <div className="flex flex-col gap-2 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2 text-[11px] font-semibold text-orange-700">
-                            <span className="rounded-full bg-orange-50 px-2 py-0.5">Shared track</span>
+                            <span className="app-pill">Shared track</span>
                             <span className="text-slate-600">Scaled to active challenges</span>
                           </div>
-                          <span className="text-[11px] font-semibold text-slate-700">{maxAvailablePoints} pts available</span>
+                          <span className="app-pill text-[11px] font-semibold">{maxAvailablePoints} pts available</span>
                         </div>
                         <div
-                          className="relative mt-4 rounded-xl bg-[#FEF3E2] px-6 py-6 shadow-inner shadow-orange-50"
+                          className="relative mt-4 rounded-xl bg-white/80 px-6 py-6 shadow-inner shadow-orange-50"
                           style={{ height: `${trackHeight}px` }}
                         >
                           <div
@@ -488,10 +481,8 @@ export default function LeaderboardPage() {
                             key={row.user_id}
                             type="button"
                             onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
-                            className={`flex items-center gap-3 rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] p-3 text-left transition focus:outline-none ${
-                              isFocused
-                                ? "ring-2 ring-orange-300 shadow-lg shadow-orange-100"
-                                : "hover:-translate-y-0.5 shadow-sm shadow-orange-50"
+                            className={`app-card app-card-hover app-focus flex items-center gap-3 rounded-2xl p-3 text-left ${
+                              isFocused ? "ring-2 ring-orange-300 shadow-lg shadow-orange-100" : ""
                             }`}
                           >
                           <div className={`rounded-full ${gradient} p-[2px] shadow-inner shadow-orange-100`}>
@@ -500,13 +491,13 @@ export default function LeaderboardPage() {
                             <div className="flex-1 space-y-1">
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold text-slate-900">{row.name}</p>
-                                <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                <span className="app-pill text-[11px] font-semibold">
                                   {row.points} pts
                                 </span>
                               </div>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                                 <span>{row.completed_count} completed challenges</span>
-                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                                <span className="app-pill text-[11px] font-semibold">
                                   {activeWeekIndex ? `Week ${activeWeekIndex}` : "Week"}
                                   {": "}
                                   {row.week_progress_percent}%
@@ -517,7 +508,7 @@ export default function LeaderboardPage() {
                         );
                       })}
                       {rows.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-[#FFB22C] bg-[#FEF3E2] p-6 text-center text-sm text-slate-500">
+                        <div className="app-card rounded-2xl border-dashed p-6 text-center text-sm text-slate-500">
                           No racers yet. Complete a challenge to join the track.
                         </div>
                       )}
@@ -535,7 +526,7 @@ export default function LeaderboardPage() {
                     return (
                       <Fragment key={row.user_id}>
                         <div
-                          className={`relative overflow-hidden rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] p-4 shadow-sm shadow-orange-100 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                          className={`app-card app-card-hover relative overflow-hidden rounded-2xl p-4 ${
                             isExpanded ? "ring-2 ring-orange-200" : ""
                           }`}
                         >
@@ -571,7 +562,7 @@ export default function LeaderboardPage() {
                         </div>
 
                         {isExpanded && (
-                          <div className="-mt-2 mb-3 overflow-hidden rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] px-4 py-3 text-sm shadow-inner shadow-orange-100">
+                          <div className="-mt-2 mb-3 overflow-hidden rounded-2xl border border-[rgba(255,178,44,0.5)] bg-white/80 px-4 py-3 text-sm shadow-inner shadow-orange-100">
                             <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Recent contributions</p>
                             {memberContributions.length === 0 && (
                               <p className="mt-2 text-xs text-slate-500">No submissions loaded yet.</p>
@@ -580,7 +571,7 @@ export default function LeaderboardPage() {
                               {memberContributions.map((entry) => (
                                 <li
                                   key={`${row.user_id}-${entry.challenge_id}-${entry.completed_at}`}
-                                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#FFB22C] bg-[#FEF3E2] px-3 py-2 text-xs"
+                                  className="app-card flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs"
                                 >
                                   <div className="flex flex-col">
                                     <span className="font-semibold text-slate-800">{entry.challenge_title}</span>
@@ -596,7 +587,7 @@ export default function LeaderboardPage() {
                     );
                   })}
                   {rows.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-[#FFB22C] bg-[#FEF3E2] p-6 text-center text-sm text-slate-500">
+                    <div className="app-card rounded-2xl border-dashed p-6 text-center text-sm text-slate-500">
                       No data yet for this group.
                     </div>
                   )}
@@ -606,10 +597,8 @@ export default function LeaderboardPage() {
                   <button
                     disabled={!activityHasMore || activityLoading}
                     onClick={loadMoreActivity}
-                    className={`inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
-                      activityHasMore
-                        ? "bg-[#FA812F] text-white shadow-sm hover:bg-[#FFB22C]"
-                        : "cursor-not-allowed border border-[#FFB22C] bg-[#FEF3E2] text-slate-400"
+                    className={`app-button-primary app-focus px-5 py-2 text-sm ${
+                      activityHasMore ? "" : "cursor-not-allowed opacity-50"
                     }`}
                   >
                     {activityLoading ? "Loading..." : activityHasMore ? "Load more activity" : "No more activity"}
@@ -619,7 +608,7 @@ export default function LeaderboardPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-3xl border border-dashed border-[#FFB22C] bg-[#FEF3E2] p-8 text-center text-sm text-slate-600 shadow-inner shadow-orange-100">
+            <div className="app-card rounded-3xl border-dashed p-8 text-center text-sm text-slate-600 shadow-inner shadow-orange-100">
               Join or create a group to see the leaderboard.
             </div>
           )}
