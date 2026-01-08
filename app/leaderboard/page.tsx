@@ -307,9 +307,9 @@ export default function LeaderboardPage() {
   const topPerformer = rows[0];
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-orange-100 via-amber-50 to-rose-50 text-slate-900">
+    <main className="min-h-screen bg-orange-50 text-slate-900">
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
-        <div className="flex flex-col gap-4 rounded-3xl bg-white/70 p-6 shadow-xl shadow-orange-100/60 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-3xl bg-white p-6 shadow-sm shadow-orange-100/60 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-amber-700">Leaderboard</p>
             <h1 className="text-3xl font-semibold text-slate-900">Group rankings</h1>
@@ -318,7 +318,7 @@ export default function LeaderboardPage() {
             </p>
           </div>
           <a
-            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:translate-y-[-1px]"
+            className="inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
             href="/dashboard"
           >
             Back to dashboard
@@ -326,7 +326,7 @@ export default function LeaderboardPage() {
         </div>
 
         <div className="mt-8 space-y-4">
-          <div className="rounded-3xl bg-white/80 p-4 shadow-lg shadow-orange-100/70 backdrop-blur">
+          <div className="rounded-3xl bg-white p-4 shadow-sm shadow-orange-100/70">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-700">Choose a group</p>
@@ -343,8 +343,8 @@ export default function LeaderboardPage() {
                       onClick={() => handleTeamChange(id)}
                       className={`rounded-full border px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                         isActive
-                          ? "border-transparent bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-lg shadow-orange-200"
-                          : "border-orange-100 bg-white/70 text-slate-700 hover:border-orange-200 hover:bg-white"
+                          ? "border-transparent bg-orange-500 text-white shadow-sm"
+                          : "border-orange-100 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50"
                       }`}
                       disabled={teams.length === 0}
                     >
@@ -360,8 +360,8 @@ export default function LeaderboardPage() {
 
           {activeTeam ? (
             <div className="grid gap-6 lg:grid-cols-5">
-              <div className="rounded-3xl bg-gradient-to-b from-orange-400 via-amber-300 to-rose-200 p-6 text-slate-900 shadow-xl shadow-orange-200/70 lg:col-span-2">
-                <div className="rounded-2xl bg-white/30 p-4 shadow-inner shadow-amber-200/40 backdrop-blur">
+              <div className="rounded-3xl bg-orange-100 p-6 text-slate-900 shadow-sm shadow-orange-200/70 lg:col-span-2">
+                <div className="rounded-2xl bg-white p-4 shadow-sm shadow-amber-200/40">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">Current leader</p>
                   <div className="mt-3 flex items-center gap-3">
                     <ProfileCircle iconId={topPerformer?.icon} name={topPerformer?.name ?? "Current leader"} size="md" />
@@ -376,12 +376,12 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-2xl bg-white/40 p-4 backdrop-blur">
+                  <div className="rounded-2xl bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Participants</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{rows.length}</p>
                     <p className="text-xs text-amber-900/80">Active group members logged.</p>
                   </div>
-                  <div className="rounded-2xl bg-white/40 p-4 backdrop-blur">
+                  <div className="rounded-2xl bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/70">Submissions</p>
                     <p className="mt-2 text-2xl font-bold text-slate-900">{activityOffset}</p>
                     <p className="text-xs text-amber-900/80">Loaded contributions so far.</p>
@@ -390,7 +390,7 @@ export default function LeaderboardPage() {
               </div>
 
                 <div className="lg:col-span-3 space-y-4">
-                  <div className="rounded-3xl border border-orange-100 bg-white/80 p-5 shadow-lg shadow-orange-100/70 backdrop-blur">
+                  <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm shadow-orange-100/70">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-orange-600">Race view</p>
@@ -401,7 +401,7 @@ export default function LeaderboardPage() {
                     </div>
 
                     <div className="mt-4 space-y-4">
-                      <div className="rounded-2xl border border-orange-100/80 bg-white/80 p-4 shadow-sm shadow-orange-50">
+                      <div className="rounded-2xl border border-orange-100/80 bg-white p-4 shadow-sm shadow-orange-50">
                         <div className="flex flex-col gap-2 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-2 text-[11px] font-semibold text-orange-700">
                             <span className="rounded-full bg-orange-50 px-2 py-0.5">Shared track</span>
@@ -410,7 +410,7 @@ export default function LeaderboardPage() {
                           <span className="text-[11px] font-semibold text-slate-700">{maxAvailablePoints} pts available</span>
                         </div>
                         <div
-                          className="relative mt-4 rounded-xl bg-gradient-to-r from-white via-orange-50 to-white px-6 py-6 shadow-inner shadow-orange-50"
+                          className="relative mt-4 rounded-xl bg-white px-6 py-6 shadow-inner shadow-orange-50"
                           style={{ height: `${trackHeight}px` }}
                         >
                           <div
@@ -488,7 +488,7 @@ export default function LeaderboardPage() {
                             key={row.user_id}
                             type="button"
                             onClick={() => setFocusedUser(isFocused ? null : row.user_id)}
-                            className={`flex items-center gap-3 rounded-2xl border border-orange-100/70 bg-white/80 p-3 text-left transition focus:outline-none ${
+                            className={`flex items-center gap-3 rounded-2xl border border-orange-100/70 bg-white p-3 text-left transition focus:outline-none ${
                               isFocused
                                 ? "ring-2 ring-orange-300 shadow-lg shadow-orange-100"
                                 : "hover:-translate-y-0.5 shadow-sm shadow-orange-50"
@@ -517,7 +517,7 @@ export default function LeaderboardPage() {
                         );
                       })}
                       {rows.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
+                        <div className="rounded-2xl border border-dashed border-orange-200 bg-white p-6 text-center text-sm text-slate-500">
                           No racers yet. Complete a challenge to join the track.
                         </div>
                       )}
@@ -535,7 +535,7 @@ export default function LeaderboardPage() {
                     return (
                       <Fragment key={row.user_id}>
                         <div
-                          className={`relative overflow-hidden rounded-2xl border border-orange-100 bg-white/80 p-4 shadow-sm shadow-orange-100 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                          className={`relative overflow-hidden rounded-2xl border border-orange-100 bg-white p-4 shadow-sm shadow-orange-100 transition hover:-translate-y-0.5 hover:shadow-lg ${
                             isExpanded ? "ring-2 ring-orange-200" : ""
                           }`}
                         >
@@ -571,7 +571,7 @@ export default function LeaderboardPage() {
                         </div>
 
                         {isExpanded && (
-                          <div className="-mt-2 mb-3 overflow-hidden rounded-2xl border border-orange-100 bg-white/70 px-4 py-3 text-sm shadow-inner shadow-orange-100">
+                          <div className="-mt-2 mb-3 overflow-hidden rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm shadow-inner shadow-orange-100">
                             <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Recent contributions</p>
                             {memberContributions.length === 0 && (
                               <p className="mt-2 text-xs text-slate-500">No submissions loaded yet.</p>
@@ -580,7 +580,7 @@ export default function LeaderboardPage() {
                               {memberContributions.map((entry) => (
                                 <li
                                   key={`${row.user_id}-${entry.challenge_id}-${entry.completed_at}`}
-                                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-100 bg-white/90 px-3 py-2 text-xs"
+                                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs"
                                 >
                                   <div className="flex flex-col">
                                     <span className="font-semibold text-slate-800">{entry.challenge_title}</span>
@@ -596,7 +596,7 @@ export default function LeaderboardPage() {
                     );
                   })}
                   {rows.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-orange-200 bg-white/70 p-6 text-center text-sm text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-orange-200 bg-white p-6 text-center text-sm text-slate-500">
                       No data yet for this group.
                     </div>
                   )}
@@ -608,8 +608,8 @@ export default function LeaderboardPage() {
                     onClick={loadMoreActivity}
                     className={`inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                       activityHasMore
-                        ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-orange-200 hover:translate-y-[-1px]"
-                        : "cursor-not-allowed border border-orange-100 bg-white/70 text-slate-400"
+                        ? "bg-orange-500 text-white shadow-sm hover:bg-orange-600"
+                        : "cursor-not-allowed border border-orange-100 bg-white text-slate-400"
                     }`}
                   >
                     {activityLoading ? "Loading..." : activityHasMore ? "Load more activity" : "No more activity"}
@@ -619,7 +619,7 @@ export default function LeaderboardPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-slate-600 shadow-inner shadow-orange-100">
+            <div className="rounded-3xl border border-dashed border-orange-200 bg-white p-8 text-center text-sm text-slate-600 shadow-inner shadow-orange-100">
               Join or create a group to see the leaderboard.
             </div>
           )}

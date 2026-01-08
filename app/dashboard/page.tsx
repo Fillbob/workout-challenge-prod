@@ -1615,12 +1615,12 @@ export default function DashboardPage() {
   }, [currentTime, openChallenges]);
 
   const cardClass =
-    "rounded-2xl border border-orange-100/80 bg-gradient-to-br from-white via-orange-50/40 to-sky-50/60 shadow-lg shadow-orange-100/60 backdrop-blur";
+    "rounded-2xl border border-orange-100/80 bg-white shadow-sm shadow-orange-100/40";
 
   const unreadCount = activeTeamId ? unreadCounts[activeTeamId] ?? 0 : 0;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-sky-50 text-slate-900">
+    <main className="min-h-screen bg-orange-50 text-slate-900">
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
@@ -1637,13 +1637,13 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <a
-              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-orange-500 via-pink-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-pink-100 transition hover:translate-y-[-1px]"
+              className="inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
               href="/leaderboard"
             >
               Leaderboard
             </a>
             <button
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800"
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
               onClick={async () => {
                 await supabase.auth.signOut();
                 window.location.href = "/";
