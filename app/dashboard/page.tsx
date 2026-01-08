@@ -1614,18 +1614,17 @@ export default function DashboardPage() {
     };
   }, [currentTime, openChallenges]);
 
-  const cardClass =
-    "rounded-2xl border border-orange-100/80 bg-gradient-to-br from-white via-orange-50/40 to-sky-50/60 shadow-lg shadow-orange-100/60 backdrop-blur";
+  const cardClass = "app-card app-card-hover";
 
   const unreadCount = activeTeamId ? unreadCounts[activeTeamId] ?? 0 : 0;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-orange-50 via-rose-50 to-sky-50 text-slate-900">
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+    <main className="app-shell min-h-screen">
+      <div className="app-panel max-w-6xl mx-auto px-6 py-10 space-y-8 rounded-[32px]">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-orange-600 shadow-sm shadow-orange-100">
-              <span className="h-2 w-2 rounded-full bg-gradient-to-r from-orange-500 via-rose-500 to-amber-400" />
+            <p className="app-section-pill">
+              <span className="h-2 w-2 rounded-full bg-[#FA812F]" />
               Dashboard
             </p>
             <h1 className="text-3xl font-semibold">
@@ -1636,14 +1635,11 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <a
-              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-orange-500 via-pink-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-pink-100 transition hover:translate-y-[-1px]"
-              href="/leaderboard"
-            >
+            <a className="app-button-primary app-focus" href="/leaderboard">
               Leaderboard
             </a>
             <button
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800"
+              className="app-button-secondary app-focus"
               onClick={async () => {
                 await supabase.auth.signOut();
                 window.location.href = "/";
@@ -1658,15 +1654,15 @@ export default function DashboardPage() {
           <div className={`${cardClass} space-y-4 p-6`}>
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-orange-600">Weekly challenges</p>
-                <h2 className="text-xl font-semibold text-slate-900">Stay on track</h2>
-                <p className="text-sm text-slate-600">
+                <p className="app-section-pill">Weekly challenges</p>
+                <h2 className="text-xl font-semibold text-slate-900 leading-snug">Stay on track</h2>
+                <p className="text-sm text-slate-600 leading-relaxed">
                   {nextClosing
                     ? `${nextClosing.closingLabel}${nextClosing.lockDateLabel ? ` · Locks ${nextClosing.lockDateLabel}` : ""}`
                     : "No deadlines set yet."}
                 </p>
               </div>
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 via-amber-50 to-emerald-100 text-center shadow-inner shadow-orange-100">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[#F3C623] to-[#FFB22C] text-center shadow-inner shadow-orange-200">
                 <div>
                   <p className="text-3xl font-bold text-orange-600">{nextClosing?.daysUntilClose ?? "--"}</p>
                   <p className="text-xs text-slate-500">days left</p>
@@ -1675,29 +1671,29 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-2 text-sm text-slate-600">
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="app-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FA812F]" />
                   Active
                 </span>
                 <span className="font-semibold text-slate-900">{openChallenges.length}</span> active challenges
               </p>
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                <span className="app-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FA812F]" />
                   Closed
                 </span>
                 <span className="font-semibold text-slate-900">{closedChallenges.length}</span> closed challenges
               </p>
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                <span className="app-pill bg-[rgba(250,129,47,0.18)] text-slate-900">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
                   Completed
                 </span>
                 <span className="font-semibold text-slate-900">{Object.values(submissionState).filter(Boolean).length}</span> completed so far
               </p>
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                <span className="app-pill">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FFB22C]" />
                   Team
                 </span>
                 {activeTeamName ?? "None selected"}
@@ -1705,18 +1701,18 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className={`${cardClass} lg:col-span-2 space-y-4 bg-gradient-to-br from-orange-100 via-white to-sky-100 p-6`}>
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Points</p>
-                <h2 className="text-4xl font-semibold text-slate-900">{totalPoints}</h2>
-                <p className="text-slate-600 text-sm">Points earned from completed challenges.</p>
+                <p className="app-section-pill">Points</p>
+                <h2 className="text-4xl font-semibold text-slate-900 leading-tight">{totalPoints}</h2>
+                <p className="text-sm text-slate-600 leading-relaxed">Points earned from completed challenges.</p>
               </div>
-              <span className="rounded-full border border-orange-200 bg-gradient-to-r from-sky-50 via-emerald-50 to-orange-50 px-3 py-1 text-xs font-semibold text-sky-800">
+              <span className="app-pill">
                 {weeklyPoints.length} weeks tracked
               </span>
             </div>
-            <div className="rounded-xl border border-orange-100 bg-white/80 p-4">
+            <div className="app-card rounded-xl p-4">
               {weeklyPoints.length === 0 ? (
                 <p className="text-sm text-slate-500">Complete challenges to see your trend.</p>
               ) : (
@@ -1726,7 +1722,7 @@ export default function DashboardPage() {
             {weeklyPoints.length > 0 && (
               <div className="flex flex-wrap gap-2 text-xs text-orange-700">
                 {weeklyPoints.map((entry) => (
-                  <span key={entry.week} className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1">
+                  <span key={entry.week} className="app-pill">
                     Week {entry.week}: {entry.points} pts
                   </span>
                 ))}
@@ -1739,16 +1735,16 @@ export default function DashboardPage() {
           <div className={`${cardClass} lg:col-span-3 space-y-4 p-6`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Announcements</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Announcements</h2>
-                <p className="text-sm text-slate-600">Admin and moderator posts appear here.</p>
+                <p className="app-section-pill">Announcements</p>
+                <h2 className="text-2xl font-semibold text-slate-900 leading-snug">Announcements</h2>
+                <p className="text-sm text-slate-600 leading-relaxed">Admin and moderator posts appear here.</p>
               </div>
               <div className="flex items-center gap-2">
                 {announcementStatus && <span className="text-sm font-medium text-rose-600">{announcementStatus}</span>}
                 {hasOlderAnnouncements && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-xs font-semibold text-orange-700 shadow-sm transition hover:bg-white"
+                    className="app-button-outline app-focus"
                     aria-expanded={announcementsExpanded}
                     onClick={() => setAnnouncementsExpanded((prev) => !prev)}
                   >
@@ -1766,7 +1762,7 @@ export default function DashboardPage() {
                   {visibleAnnouncements.map((announcement) => (
                     <li
                       key={announcement.id}
-                      className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
+                      className="app-card app-card-hover rounded-xl p-4"
                     >
                       <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
                         <div className="space-y-1">
@@ -1790,11 +1786,11 @@ export default function DashboardPage() {
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Challenges</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Weekly goals</h2>
+                <p className="app-section-pill">Challenges</p>
+                <h2 className="text-2xl font-semibold text-slate-900 leading-snug">Weekly goals</h2>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2 text-left shadow-sm">
+                <div className="app-card flex flex-wrap items-center gap-3 rounded-xl px-3 py-2 text-left">
                   <div className="flex flex-col leading-tight">
                     <span className="text-sm font-semibold text-slate-900">
                       {stravaConnectionInfo.connected ? "Strava connected" : "Connect Strava"}
@@ -1811,17 +1807,15 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   {stravaConnectionInfo.connected && stravaConnectionInfo.athleteId && (
-                    <span className="rounded-full bg-orange-50 px-2 py-1 text-[11px] font-semibold text-orange-700">
+                    <span className="app-pill text-[11px] font-semibold">
                       #{stravaConnectionInfo.athleteId}
                     </span>
                   )}
                   <div className="flex items-center gap-2">
                     <button
-                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 ${
-                        stravaConnectionInfo.connected
-                          ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                      } ${stravaLoading ? "cursor-not-allowed opacity-60" : ""}`}
+                      className={`app-button-secondary app-focus px-3 py-2 text-xs ${
+                        stravaLoading ? "cursor-not-allowed opacity-60" : ""
+                      }`}
                       onClick={stravaConnectionInfo.connected ? handleStravaDisconnect : startStravaAuth}
                       disabled={stravaLoading}
                     >
@@ -1832,10 +1826,8 @@ export default function DashboardPage() {
                           : "Connect Strava"}
                     </button>
                     <button
-                      className={`rounded-lg border px-3 py-2 text-xs font-semibold text-slate-700 transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 ${
-                        stravaLoading || !stravaConnectionInfo.connected
-                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-                          : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                      className={`app-button-outline app-focus px-3 py-2 text-xs ${
+                        stravaLoading || !stravaConnectionInfo.connected ? "cursor-not-allowed opacity-60" : ""
                       }`}
                       onClick={() => refreshStravaConnection(true)}
                       disabled={stravaLoading || !stravaConnectionInfo.connected}
@@ -1843,10 +1835,8 @@ export default function DashboardPage() {
                       Refresh
                     </button>
                     <button
-                      className={`rounded-lg border px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 ${
-                        stravaLoading || !stravaConnectionInfo.connected
-                          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-                          : "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                      className={`app-button-primary app-focus px-3 py-2 text-xs ${
+                        stravaLoading || !stravaConnectionInfo.connected ? "cursor-not-allowed opacity-60" : ""
                       }`}
                       onClick={handleStravaSync}
                       disabled={stravaLoading || !stravaConnectionInfo.connected}
@@ -1859,10 +1849,8 @@ export default function DashboardPage() {
                   onClick={handleSaveSubmissions}
                   disabled={saveDisabled}
                   title={!hasChanges ? "No changes to save." : undefined}
-                  className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2 focus:ring-offset-orange-50 ${
-                    saveDisabled
-                      ? "cursor-not-allowed bg-slate-200 text-slate-500"
-                      : "bg-orange-500 hover:bg-orange-600"
+                  className={`app-button-primary app-focus px-4 py-2 text-sm ${
+                    saveDisabled ? "cursor-not-allowed opacity-50" : ""
                   }`}
                 >
                   {isSaving ? "Saving..." : "Save progress"}
@@ -1870,17 +1858,15 @@ export default function DashboardPage() {
               </div>
             </div>
             {stravaMessage && (
-              <div className="w-fit rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
+              <div className="app-pill w-fit text-sm text-slate-800">
                 {stravaMessage}
               </div>
             )}
             {!hasChanges && <p className="text-xs text-slate-500">No changes to save.</p>}
             {saveStatus && (
               <div
-                className={`w-fit rounded-lg border px-3 py-2 text-sm ${
-                  saveStatus.tone === "success"
-                    ? "border-green-200 bg-green-50 text-green-800"
-                    : "border-rose-200 bg-rose-50 text-rose-700"
+                className={`app-pill w-fit text-sm ${
+                  saveStatus.tone === "success" ? "text-emerald-800" : "text-rose-700"
                 }`}
               >
                 {saveStatus.message}
@@ -1915,7 +1901,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={challenge.id}
-                    className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 p-4"
+                    className="app-card app-card-hover flex items-start gap-3 rounded-xl p-4"
                   >
                     <button
                       type="button"
@@ -1935,8 +1921,8 @@ export default function DashboardPage() {
                           toggleChallenge(challenge, !checked);
                         }
                       }}
-                      className={`mt-1 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-orange-50 ${
-                        checked ? "bg-orange-500" : "bg-slate-200"
+                      className={`app-focus mt-1 inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        checked ? "bg-[#FA812F]" : "bg-slate-200"
                       } ${toggleDisabled ? "cursor-not-allowed opacity-60" : ""}`}
                     >
                       <span
@@ -1958,17 +1944,15 @@ export default function DashboardPage() {
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                         <span
-                          className={`rounded-full border px-2 py-1 ${
-                            closingInfo.isEditable
-                              ? "border-orange-200 bg-orange-100 text-orange-700"
-                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          className={`app-pill ${
+                            closingInfo.isEditable ? "text-orange-700" : "bg-white/70 text-slate-600"
                           }`}
                         >
                           {closingInfo.closingLabel}
                         </span>
                         <span className="text-slate-500">{statusDetail}</span>
                         {autoLocked && (
-                          <span className="rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700">Auto-completed from Strava</span>
+                          <span className="app-pill text-slate-700">Auto-completed from Strava</span>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -1985,17 +1969,17 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
                           {progressInfo?.label && (
-                            <span className="rounded-full bg-white/80 px-2 py-1 font-semibold text-slate-700">
+                            <span className="app-pill text-slate-700">
                               {progressInfo.label}
                             </span>
                           )}
                           {progressInfo?.source === "strava" && (
-                            <span className="rounded-full bg-sky-50 px-2 py-1 font-semibold text-sky-700">
+                            <span className="app-pill text-slate-700">
                               Strava {progressUpdatedLabel ? `· Updated ${progressUpdatedLabel}` : "activity"}
                             </span>
                           )}
                           {!progressInfo?.source && (
-                            <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-600">
+                            <span className="app-pill text-slate-600">
                               Manual tracking
                             </span>
                           )}
@@ -2008,16 +1992,16 @@ export default function DashboardPage() {
                             <span className="text-xs text-slate-500">No tracker data yet—update progress manually.</span>
                           )}
                         </div>
-                        <div className="rounded-xl border border-orange-100 bg-white/70 text-xs shadow-inner shadow-orange-100">
+                        <div className="app-card rounded-xl text-xs shadow-inner shadow-orange-100">
                           <button
                             type="button"
                             onClick={() => toggleChallengeDetails(challenge.id)}
-                            className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left font-semibold text-slate-800 hover:bg-orange-50"
+                            className="app-focus flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left font-semibold text-slate-800 hover:bg-[rgba(255,178,44,0.12)]"
                           >
                             <div className="flex items-center gap-2">
                               <span className="text-orange-600">▼</span>
                               <span>Submissions counted</span>
-                              <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                              <span className="app-pill text-[11px] font-semibold">
                                 {challengeEntries.length}
                               </span>
                             </div>
@@ -2210,9 +2194,9 @@ export default function DashboardPage() {
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Group activity</p>
-                <h2 className="text-xl font-semibold text-slate-900">Recent submissions</h2>
-                <p className="text-sm text-slate-600">Last 7 days</p>
+                <p className="app-section-pill">Group activity</p>
+                <h2 className="text-xl font-semibold text-slate-900 leading-snug">Recent submissions</h2>
+                <p className="text-sm text-slate-600 leading-relaxed">Last 7 days</p>
               </div>
               {recentStatus && <span className="text-sm font-medium text-rose-600">{recentStatus}</span>}
             </div>
@@ -2229,7 +2213,7 @@ export default function DashboardPage() {
                 {recentSubmissions.map((submission) => (
                   <li
                     key={submission.id}
-                    className="flex items-start justify-between rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-amber-50 to-sky-50 p-3"
+                    className="app-card app-card-hover flex items-start justify-between rounded-xl p-3"
                   >
                     <div className="space-y-1">
                       <p className="font-semibold text-slate-900">{submission.name}</p>
@@ -2246,10 +2230,8 @@ export default function DashboardPage() {
                   <button
                     disabled={!recentHasMore || recentLoading}
                     onClick={() => activeTeamId && loadRecentActivity(activeTeamId)}
-                    className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-                      recentHasMore
-                        ? "bg-orange-500 text-white hover:bg-orange-600"
-                        : "cursor-not-allowed bg-slate-200 text-slate-500"
+                    className={`app-button-primary app-focus px-4 py-2 text-sm ${
+                      recentHasMore ? "" : "cursor-not-allowed opacity-50"
                     }`}
                   >
                     {recentLoading ? "Loading..." : recentHasMore ? "Load more" : "No more results"}
@@ -2264,11 +2246,11 @@ export default function DashboardPage() {
           <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-orange-600">Welcome</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Update your display name</h2>
+                <p className="app-section-pill">Welcome</p>
+                <h2 className="text-2xl font-semibold text-slate-900 leading-snug">Update your display name</h2>
                 <div className="flex flex-wrap gap-2 text-xs text-orange-700">
-                  {userIdentifier && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">ID: {userIdentifier}</span>}
-                  {profileRole && <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1">Access: {profileRole}</span>}
+                  {userIdentifier && <span className="app-pill">ID: {userIdentifier}</span>}
+                  {profileRole && <span className="app-pill">Access: {profileRole}</span>}
                 </div>
               </div>
               {profileStatus && <span className="text-sm font-medium text-orange-700">{profileStatus}</span>}
@@ -2293,8 +2275,8 @@ export default function DashboardPage() {
                           onClick={() => setProfileIcon(option.id)}
                           className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                             isActive
-                              ? "border-transparent bg-gradient-to-br from-orange-500 via-amber-400 to-rose-400 text-white shadow-lg shadow-orange-200"
-                              : "border-orange-100 bg-white text-slate-800 hover:border-orange-200 hover:bg-orange-50"
+                              ? "border-transparent bg-[#FA812F] text-white shadow-sm shadow-orange-200"
+                              : "border-[#FFB22C] bg-[#FEF3E2] text-slate-800 hover:border-[#FFB22C] hover:bg-[#F3C623]"
                           }`}
                           aria-label={`Select the ${option.label} icon`}
                         >
@@ -2320,7 +2302,7 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={handleProfileSave}
-                className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
+                className="app-button-primary app-focus px-4 py-2 text-sm"
               >
                 Save name
               </button>
@@ -2330,8 +2312,8 @@ export default function DashboardPage() {
           <div className={`${cardClass} space-y-4 p-6`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-orange-600">Groups</p>
-                <h2 className="text-2xl font-semibold text-slate-900">Join or switch groups</h2>
+                <p className="app-section-pill">Groups</p>
+                <h2 className="text-2xl font-semibold text-slate-900 leading-snug">Join or switch groups</h2>
               </div>
               {teamStatus && <span className="text-sm font-medium text-orange-700">{teamStatus}</span>}
             </div>
@@ -2340,11 +2322,11 @@ export default function DashboardPage() {
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="Enter join code"
-                className="flex-1 rounded-xl border border-orange-200 bg-white px-3 py-3 text-slate-900 shadow-inner focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                className="flex-1 rounded-xl border border-[rgba(255,178,44,0.6)] bg-white/80 px-3 py-3 text-slate-900 shadow-inner focus:border-[#FFB22C] focus:outline-none focus:ring-2 focus:ring-[#FFB22C]"
               />
               <button
                 onClick={handleJoinTeam}
-                className="rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white shadow hover:bg-orange-600"
+                className="app-button-primary app-focus px-4 py-3 text-sm"
               >
                 Join
               </button>
@@ -2359,10 +2341,8 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={row.team.id}
-                      className={`flex items-center justify-between rounded-xl border p-3 ${
-                        activeTeamId === row.team.id
-                          ? "border-orange-300 bg-orange-50 shadow"
-                          : "border-orange-100 bg-white"
+                      className={`app-card app-card-hover flex items-center justify-between rounded-xl p-3 ${
+                        activeTeamId === row.team.id ? "border-[#FFB22C]" : ""
                       }`}
                     >
                       <div>
@@ -2372,13 +2352,13 @@ export default function DashboardPage() {
                       <div className="flex gap-3 text-sm">
                         <button
                           onClick={() => handleActiveTeamChange(row.team!.id)}
-                          className="font-semibold text-orange-700 hover:text-orange-800"
+                          className="app-button-outline app-focus"
                         >
                           {activeTeamId === row.team.id ? "Active" : "Set active"}
                         </button>
                         <button
                           onClick={() => handleLeaveTeam(row.team!.id)}
-                          className="font-semibold text-rose-600 hover:text-rose-700"
+                          className="app-button-outline app-focus text-rose-700"
                         >
                           Leave
                         </button>
@@ -2393,9 +2373,9 @@ export default function DashboardPage() {
 
         {activeTeamId && (
           <div className={`${cardClass} p-5`}>
-            <p className="text-sm font-semibold text-orange-600">Active group</p>
-            <h3 className="text-xl font-semibold text-slate-900">{activeTeamName}</h3>
-            <p className="text-sm text-slate-600">
+            <p className="app-section-pill">Active group</p>
+            <h3 className="text-xl font-semibold text-slate-900 leading-snug">{activeTeamName}</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">
               View group stats in the <a className="font-semibold text-orange-700" href="/leaderboard">leaderboard</a>.
             </p>
           </div>
@@ -2403,7 +2383,7 @@ export default function DashboardPage() {
 
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
           {chatStatus && (
-            <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-orange-700 shadow-lg shadow-orange-100">
+            <span className="app-pill shadow-lg shadow-orange-100">
               {chatStatus}
             </span>
           )}
@@ -2412,8 +2392,8 @@ export default function DashboardPage() {
             type="button"
             disabled={!activeTeamId}
             onClick={() => activeTeamId && setChatOpen((open) => !open)}
-            className={`group relative inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-lg shadow-orange-200 transition ${
-              activeTeamId ? "bg-orange-500 text-white hover:bg-orange-600" : "cursor-not-allowed bg-slate-300 text-slate-600"
+            className={`group relative app-button-primary app-focus gap-2 px-4 py-2 text-sm ${
+              activeTeamId ? "" : "cursor-not-allowed opacity-60"
             }`}
           >
             <span className="absolute -right-1 -top-1 inline-flex h-3 w-3 animate-pulse rounded-full bg-white/90" />
@@ -2459,8 +2439,8 @@ export default function DashboardPage() {
                     key={message.id}
                     className={`rounded-lg border p-3 ${
                       isOwnMessage
-                        ? "border-orange-200 bg-gradient-to-r from-orange-100 via-amber-50 to-emerald-50 shadow-inner"
-                        : "border-orange-100 bg-gradient-to-r from-orange-50 via-rose-50 to-sky-50"
+                        ? "border-[#FFB22C] bg-[#F3C623] shadow-inner"
+                        : "border-[#FFB22C] bg-[#FEF3E2]"
                     }`}
                   >
                     <div className="flex items-center justify-between text-xs text-slate-600">

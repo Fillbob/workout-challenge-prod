@@ -21,11 +21,40 @@ type StatsRow = {
   challenges: ChallengeRelation;
 };
 
+type ProgressRow = {
+  user_id: string;
+  challenge_id: string;
+  completed: boolean | null;
+  progress_percent: number | null;
+};
+
+type ChallengeRow = {
+  id: string;
+  team_ids: string[] | null;
+  hidden: boolean | null;
+  base_points: number | null;
+  week_index: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  target_value: number | null;
+};
+
 function extractChallenge(relation: ChallengeRelation) {
   if (Array.isArray(relation)) {
     return relation[0];
   }
   return relation ?? undefined;
+}
+
+function parseDate(value: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function clampPercent(value: number) {
+  if (Number.isNaN(value)) return 0;
+  return Math.min(100, Math.max(0, Math.round(value)));
 }
 
 export async function GET(request: Request) {
@@ -84,19 +113,37 @@ export async function GET(request: Request) {
 
   const { data: challengeRows, error: challengeError } = await admin
     .from("challenges")
-    .select("id, team_ids, hidden, base_points");
+    .select("id, team_ids, hidden, base_points, week_index, start_date, end_date, target_value");
 
   if (challengeError) {
     return NextResponse.json({ error: challengeError.message }, { status: 400 });
   }
 
-  const allowedChallenges = (challengeRows ?? []).filter(
+  const allowedChallenges = (challengeRows as ChallengeRow[] | null)?.filter(
     (challenge) =>
       !challenge.hidden &&
       (!challenge.team_ids ||
         challenge.team_ids.length === 0 ||
         (Array.isArray(challenge.team_ids) && challenge.team_ids.includes(teamId))),
-  );
+  ) ?? [];
+
+  const now = new Date();
+  const activeWeekCandidates = allowedChallenges.filter((challenge) => {
+    const start = parseDate(challenge.start_date);
+    const end = parseDate(challenge.end_date);
+    if (start && now < start) return false;
+    if (end && now > end) return false;
+    return true;
+  });
+  const activeWeekList = activeWeekCandidates.length > 0 ? activeWeekCandidates : allowedChallenges;
+  const activeWeekIndices = activeWeekList
+    .map((challenge) => challenge.week_index)
+    .filter((weekIndex): weekIndex is number => typeof weekIndex === "number" && weekIndex > 0);
+  const activeWeekIndex =
+    activeWeekIndices.length > 0 ? Math.max(...activeWeekIndices) : null;
+  const activeWeekChallenges = activeWeekIndex
+    ? allowedChallenges.filter((challenge) => challenge.week_index === activeWeekIndex)
+    : [];
 
   const maxAvailablePoints = allowedChallenges.reduce(
     (total, challenge) => total + (challenge.base_points ?? 0),
@@ -122,6 +169,7 @@ export async function GET(request: Request) {
       hasMore: false,
       total: 0,
       maxAvailablePoints,
+      activeWeekIndex,
     });
   }
 
@@ -154,8 +202,86 @@ export async function GET(request: Request) {
       points: leaderboardTotals.get(id)?.points ?? 0,
       completed_count: leaderboardTotals.get(id)?.completed ?? 0,
       icon: iconMap.get(id) ?? null,
+      week_progress_percent: 0,
     }))
     .sort((a, b) => b.points - a.points || b.completed_count - a.completed_count || a.name.localeCompare(b.name));
+
+  const { data: progressRows, error: progressError } = await admin
+    .from("submissions")
+    .select("user_id, challenge_id, completed, progress_percent")
+    .in("user_id", memberIds)
+    .in("challenge_id", allowedChallengeIds);
+
+  if (progressError) {
+    return NextResponse.json({ error: progressError.message }, { status: 400 });
+  }
+
+  const progressByUser = new Map<string, Map<string, number>>();
+  (progressRows as ProgressRow[] | null)?.forEach((row) => {
+    const percentRaw =
+      typeof row.progress_percent === "number"
+        ? row.progress_percent
+        : row.completed
+          ? 100
+          : 0;
+    const percent = clampPercent(percentRaw);
+    if (!progressByUser.has(row.user_id)) {
+      progressByUser.set(row.user_id, new Map());
+    }
+    progressByUser.get(row.user_id)?.set(row.challenge_id, percent);
+  });
+
+  const activeWeekChallengeIds = activeWeekChallenges.map((challenge) => challenge.id);
+  const targetByChallenge = new Map<string, number | null>(
+    activeWeekChallenges.map((challenge) => [challenge.id, challenge.target_value ?? null]),
+  );
+
+  const progressTotalsRows: {
+    user_id: string;
+    challenge_id: string;
+    progress_value: number | null;
+    target_value: number | null;
+  }[] = [];
+  if (activeWeekChallengeIds.length > 0) {
+    const { data, error: progressTotalsError } = await admin
+      .from("submission_progress")
+      .select("user_id, challenge_id, progress_value, target_value")
+      .in("user_id", memberIds)
+      .in("challenge_id", activeWeekChallengeIds);
+
+    if (progressTotalsError) {
+      return NextResponse.json({ error: progressTotalsError.message }, { status: 400 });
+    }
+    progressTotalsRows.push(...((data as typeof progressTotalsRows | null) ?? []));
+  }
+
+  const progressTotals = new Map<string, { total: number; target: number | null }>();
+  progressTotalsRows.forEach((row) => {
+    const key = `${row.user_id}:${row.challenge_id}`;
+    const existing = progressTotals.get(key) ?? { total: 0, target: row.target_value ?? null };
+    const target = existing.target ?? row.target_value ?? targetByChallenge.get(row.challenge_id) ?? null;
+    progressTotals.set(key, {
+      total: existing.total + Number(row.progress_value ?? 0),
+      target,
+    });
+  });
+
+  const leaderboardWithWeekProgress = leaderboard.map((row) => {
+    if (activeWeekChallengeIds.length === 0) {
+      return { ...row, week_progress_percent: 0 };
+    }
+    const challengeProgress = progressByUser.get(row.user_id);
+    const total = activeWeekChallengeIds.reduce((sum, challengeId) => {
+      const key = `${row.user_id}:${challengeId}`;
+      const totals = progressTotals.get(key);
+      if (totals && typeof totals.target === "number" && totals.target > 0) {
+        return sum + clampPercent((totals.total / totals.target) * 100);
+      }
+      return sum + (challengeProgress?.get(challengeId) ?? 0);
+    }, 0);
+    const percent = clampPercent(total / activeWeekChallengeIds.length);
+    return { ...row, week_progress_percent: percent };
+  });
 
   const { data: submissions, error: contributionError, count } = await admin
     .from("submissions")
@@ -192,5 +318,12 @@ export async function GET(request: Request) {
     });
   });
 
-  return NextResponse.json({ leaderboard, contributions, hasMore, total, maxAvailablePoints });
+  return NextResponse.json({
+    leaderboard: leaderboardWithWeekProgress,
+    contributions,
+    hasMore,
+    total,
+    maxAvailablePoints,
+    activeWeekIndex,
+  });
 }
