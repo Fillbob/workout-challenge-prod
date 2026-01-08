@@ -1615,17 +1615,17 @@ export default function DashboardPage() {
   }, [currentTime, openChallenges]);
 
   const cardClass =
-    "rounded-2xl border border-orange-100/80 bg-white shadow-sm shadow-orange-100/40";
+    "rounded-2xl border border-[#FFB22C] bg-[#FEF3E2] shadow-sm shadow-orange-100/40";
 
   const unreadCount = activeTeamId ? unreadCounts[activeTeamId] ?? 0 : 0;
 
   return (
-    <main className="min-h-screen bg-orange-50 text-slate-900">
+    <main className="min-h-screen bg-[#FEF3E2] text-slate-900">
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-orange-600 shadow-sm shadow-orange-100">
-              <span className="h-2 w-2 rounded-full bg-gradient-to-r from-orange-500 via-rose-500 to-amber-400" />
+            <p className="inline-flex items-center gap-2 rounded-full border border-[#FFB22C] bg-[#FEF3E2] px-3 py-1 text-xs font-semibold text-orange-700 shadow-sm">
+              <span className="h-2 w-2 rounded-full bg-[#FA812F]" />
               Dashboard
             </p>
             <h1 className="text-3xl font-semibold">
@@ -1637,13 +1637,13 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <a
-              className="inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600"
+              className="inline-flex items-center justify-center rounded-full bg-[#FA812F] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#FFB22C]"
               href="/leaderboard"
             >
               Leaderboard
             </a>
             <button
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="rounded-full border border-[#FFB22C] bg-[#F3C623] px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-[#FFB22C]"
               onClick={async () => {
                 await supabase.auth.signOut();
                 window.location.href = "/";
@@ -1666,7 +1666,7 @@ export default function DashboardPage() {
                     : "No deadlines set yet."}
                 </p>
               </div>
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 via-amber-50 to-emerald-100 text-center shadow-inner shadow-orange-100">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#F3C623] text-center shadow-inner shadow-orange-100">
                 <div>
                   <p className="text-3xl font-bold text-orange-600">{nextClosing?.daysUntilClose ?? "--"}</p>
                   <p className="text-xs text-slate-500">days left</p>
@@ -1675,29 +1675,29 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-2 text-sm text-slate-600">
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#F3C623] px-2 py-1 text-xs font-semibold text-slate-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FA812F]" />
                   Active
                 </span>
                 <span className="font-semibold text-slate-900">{openChallenges.length}</span> active challenges
               </p>
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#FFB22C] px-2 py-1 text-xs font-semibold text-slate-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FA812F]" />
                   Closed
                 </span>
                 <span className="font-semibold text-slate-900">{closedChallenges.length}</span> closed challenges
               </p>
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#FA812F] px-2 py-1 text-xs font-semibold text-white">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white" />
                   Completed
                 </span>
                 <span className="font-semibold text-slate-900">{Object.values(submissionState).filter(Boolean).length}</span> completed so far
               </p>
               <p className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#FFB22C] bg-[#FEF3E2] px-2 py-1 text-xs font-semibold text-slate-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#FFB22C]" />
                   Team
                 </span>
                 {activeTeamName ?? "None selected"}
@@ -1705,18 +1705,18 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className={`${cardClass} lg:col-span-2 space-y-4 bg-gradient-to-br from-orange-100 via-white to-sky-100 p-6`}>
+          <div className={`${cardClass} lg:col-span-2 space-y-4 p-6`}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-orange-600">Points</p>
                 <h2 className="text-4xl font-semibold text-slate-900">{totalPoints}</h2>
                 <p className="text-slate-600 text-sm">Points earned from completed challenges.</p>
               </div>
-              <span className="rounded-full border border-orange-200 bg-gradient-to-r from-sky-50 via-emerald-50 to-orange-50 px-3 py-1 text-xs font-semibold text-sky-800">
+              <span className="rounded-full border border-[#FFB22C] bg-[#FEF3E2] px-3 py-1 text-xs font-semibold text-orange-700">
                 {weeklyPoints.length} weeks tracked
               </span>
             </div>
-            <div className="rounded-xl border border-orange-100 bg-white/80 p-4">
+            <div className="rounded-xl border border-[#FFB22C] bg-[#FEF3E2] p-4">
               {weeklyPoints.length === 0 ? (
                 <p className="text-sm text-slate-500">Complete challenges to see your trend.</p>
               ) : (
@@ -1726,7 +1726,7 @@ export default function DashboardPage() {
             {weeklyPoints.length > 0 && (
               <div className="flex flex-wrap gap-2 text-xs text-orange-700">
                 {weeklyPoints.map((entry) => (
-                  <span key={entry.week} className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1">
+                  <span key={entry.week} className="rounded-full border border-[#FFB22C] bg-[#FEF3E2] px-2 py-1">
                     Week {entry.week}: {entry.points} pts
                   </span>
                 ))}
@@ -1748,7 +1748,7 @@ export default function DashboardPage() {
                 {hasOlderAnnouncements && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-xs font-semibold text-orange-700 shadow-sm transition hover:bg-white"
+                    className="inline-flex items-center gap-2 rounded-full border border-[#FFB22C] bg-[#FEF3E2] px-3 py-1 text-xs font-semibold text-orange-700 shadow-sm transition hover:bg-[#F3C623]"
                     aria-expanded={announcementsExpanded}
                     onClick={() => setAnnouncementsExpanded((prev) => !prev)}
                   >
@@ -1766,7 +1766,7 @@ export default function DashboardPage() {
                   {visibleAnnouncements.map((announcement) => (
                     <li
                       key={announcement.id}
-                      className="rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-pink-50 to-sky-50 p-4 shadow-sm"
+                      className="rounded-xl border border-[#FFB22C] bg-[#FEF3E2] p-4 shadow-sm"
                     >
                       <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
                         <div className="space-y-1">
@@ -2229,7 +2229,7 @@ export default function DashboardPage() {
                 {recentSubmissions.map((submission) => (
                   <li
                     key={submission.id}
-                    className="flex items-start justify-between rounded-xl border border-orange-100 bg-gradient-to-r from-orange-50 via-amber-50 to-sky-50 p-3"
+                    className="flex items-start justify-between rounded-xl border border-[#FFB22C] bg-[#FEF3E2] p-3"
                   >
                     <div className="space-y-1">
                       <p className="font-semibold text-slate-900">{submission.name}</p>
@@ -2293,8 +2293,8 @@ export default function DashboardPage() {
                           onClick={() => setProfileIcon(option.id)}
                           className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-orange-300 ${
                             isActive
-                              ? "border-transparent bg-gradient-to-br from-orange-500 via-amber-400 to-rose-400 text-white shadow-lg shadow-orange-200"
-                              : "border-orange-100 bg-white text-slate-800 hover:border-orange-200 hover:bg-orange-50"
+                              ? "border-transparent bg-[#FA812F] text-white shadow-sm shadow-orange-200"
+                              : "border-[#FFB22C] bg-[#FEF3E2] text-slate-800 hover:border-[#FFB22C] hover:bg-[#F3C623]"
                           }`}
                           aria-label={`Select the ${option.label} icon`}
                         >
@@ -2459,8 +2459,8 @@ export default function DashboardPage() {
                     key={message.id}
                     className={`rounded-lg border p-3 ${
                       isOwnMessage
-                        ? "border-orange-200 bg-gradient-to-r from-orange-100 via-amber-50 to-emerald-50 shadow-inner"
-                        : "border-orange-100 bg-gradient-to-r from-orange-50 via-rose-50 to-sky-50"
+                        ? "border-[#FFB22C] bg-[#F3C623] shadow-inner"
+                        : "border-[#FFB22C] bg-[#FEF3E2]"
                     }`}
                   >
                     <div className="flex items-center justify-between text-xs text-slate-600">
