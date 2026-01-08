@@ -552,14 +552,7 @@ export default function LeaderboardPage() {
                                     {row.name}
                                     <RankChangeIndicator delta={change} />
                                   </p>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                    <span>{row.completed_count} completions</span>
-                                    <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                                      {activeWeekIndex ? `Week ${activeWeekIndex}` : "Week"}
-                                      {": "}
-                                      {row.week_progress_percent}%
-                                    </span>
-                                  </div>
+                                  <p className="text-xs text-slate-500">{row.completed_count} completions</p>
                                 </div>
                                 <div className="text-right">
                                   <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">

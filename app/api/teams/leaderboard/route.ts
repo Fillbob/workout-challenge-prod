@@ -134,10 +134,15 @@ export async function GET(request: Request) {
     if (end && now > end) return false;
     return true;
   });
-  const activeWeekIndex = (activeWeekCandidates.length > 0 ? activeWeekCandidates : allowedChallenges)
-    .map((challenge) => challenge.week_index ?? 0)
-    .reduce((max, current) => (current > max ? current : max), 0);
-  const activeWeekChallenges = allowedChallenges.filter((challenge) => (challenge.week_index ?? 0) === activeWeekIndex);
+  const activeWeekList = activeWeekCandidates.length > 0 ? activeWeekCandidates : allowedChallenges;
+  const activeWeekIndices = activeWeekList
+    .map((challenge) => challenge.week_index)
+    .filter((weekIndex): weekIndex is number => typeof weekIndex === "number" && weekIndex > 0);
+  const activeWeekIndex =
+    activeWeekIndices.length > 0 ? Math.max(...activeWeekIndices) : null;
+  const activeWeekChallenges = activeWeekIndex
+    ? allowedChallenges.filter((challenge) => challenge.week_index === activeWeekIndex)
+    : [];
 
   const maxAvailablePoints = allowedChallenges.reduce(
     (total, challenge) => total + (challenge.base_points ?? 0),
