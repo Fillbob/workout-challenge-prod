@@ -427,6 +427,7 @@ export default function DashboardPage() {
   const [removalLoading, setRemovalLoading] = useState(false);
 
   const RECENT_PAGE_SIZE = 8;
+  const EVERYONE_TEAM_NAME = "Everyone";
 
   useEffect(() => {
     setCurrentTime(new Date());
@@ -962,17 +963,17 @@ export default function DashboardPage() {
   }, [refreshStravaConnection, stravaStatus.status]);
 
   const markChatRead = useCallback(
-    (teamId: string) => {
+    (chatId: string) => {
       const lastMessage = teamMessages[teamMessages.length - 1];
 
       setLastSeenMessageIds((previous) => ({
         ...previous,
-        [teamId]: lastMessage?.id ?? null,
+        [chatId]: lastMessage?.id ?? null,
       }));
 
       setUnreadCounts((previous) => ({
         ...previous,
-        [teamId]: 0,
+        [chatId]: 0,
       }));
     },
     [teamMessages],
@@ -1121,6 +1122,12 @@ export default function DashboardPage() {
 
     if (!userId) {
       setTeamStatus("You must be signed in to leave a group");
+      return;
+    }
+
+    const teamName = teams.find((team) => team.team?.id === teamId)?.team?.name;
+    if (teamName === EVERYONE_TEAM_NAME) {
+      setTeamStatus("Everyone group is required");
       return;
     }
 
@@ -2337,6 +2344,7 @@ export default function DashboardPage() {
                 {teams.length === 0 && <p className="text-sm text-slate-500">No groups yet.</p>}
                 {teams.map((row) => {
                   if (!row.team) return null;
+                  const isEveryoneTeam = row.team.name === EVERYONE_TEAM_NAME;
 
                   return (
                     <div
@@ -2346,7 +2354,10 @@ export default function DashboardPage() {
                       }`}
                     >
                       <div>
-                        <p className="font-semibold text-slate-900">{row.team.name}</p>
+                        <p className="font-semibold text-slate-900">
+                          {row.team.name}
+                          {isEveryoneTeam && <span className="ml-2 text-xs font-semibold text-orange-600">Everyone</span>}
+                        </p>
                         <p className="text-xs text-slate-600">Join code: {row.team.join_code}</p>
                       </div>
                       <div className="flex gap-3 text-sm">
@@ -2356,12 +2367,14 @@ export default function DashboardPage() {
                         >
                           {activeTeamId === row.team.id ? "Active" : "Set active"}
                         </button>
-                        <button
-                          onClick={() => handleLeaveTeam(row.team!.id)}
-                          className="app-button-outline app-focus text-rose-700"
-                        >
-                          Leave
-                        </button>
+                        {!isEveryoneTeam && (
+                          <button
+                            onClick={() => handleLeaveTeam(row.team!.id)}
+                            className="app-button-outline app-focus text-rose-700"
+                          >
+                            Leave
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
