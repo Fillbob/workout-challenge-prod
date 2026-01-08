@@ -16,6 +16,7 @@ interface LeaderboardRow {
   points: number;
   completed_count: number;
   icon?: string | null;
+  week_progress_percent: number;
 }
 
 interface ContributionRow {
@@ -76,6 +77,7 @@ export default function LeaderboardPage() {
   const [positionChanges, setPositionChanges] = useState<Record<string, number>>({});
   const [focusedUser, setFocusedUser] = useState<string | null>(null);
   const [maxAvailablePoints, setMaxAvailablePoints] = useState(0);
+  const [activeWeekIndex, setActiveWeekIndex] = useState<number | null>(null);
 
   const activityOffsetRef = useRef(0);
   const previousRowsRef = useRef<LeaderboardRow[]>([]);
@@ -152,6 +154,7 @@ export default function LeaderboardPage() {
 
         const returnedContributions: Record<string, ContributionRow[]> = payload.contributions ?? {};
         const availablePoints = Number(payload.maxAvailablePoints ?? 0);
+        const currentWeekIndex = payload.activeWeekIndex ?? null;
         const contributionCount = Object.values(returnedContributions).reduce((count, list) => count + list.length, 0);
 
         const incomingLeaderboard: LeaderboardRow[] = payload.leaderboard ?? [];
@@ -188,6 +191,7 @@ export default function LeaderboardPage() {
         setPositionChanges(movement);
         setRows(incomingLeaderboard);
         setMaxAvailablePoints(availablePoints);
+        setActiveWeekIndex(typeof currentWeekIndex === "number" ? currentWeekIndex : null);
         previousRowsRef.current = incomingLeaderboard;
         // Persist the latest ranking order so the next fetch can calculate
         // deltas even after a full reload.
@@ -490,17 +494,24 @@ export default function LeaderboardPage() {
                                 : "hover:-translate-y-0.5 shadow-sm shadow-orange-50"
                             }`}
                           >
-                            <div className={`rounded-full bg-gradient-to-r ${gradient} p-[2px] shadow-inner shadow-orange-100`}>
+                          <div className={`rounded-full bg-gradient-to-r ${gradient} p-[2px] shadow-inner shadow-orange-100`}>
                               <ProfileCircle iconId={row.icon} name={row.name} size="sm" />
                             </div>
                             <div className="flex-1 space-y-1">
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-center justify-between gap-2">
                                 <p className="text-sm font-semibold text-slate-900">{row.name}</p>
                                 <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
                                   {row.points} pts
                                 </span>
                               </div>
-                              <p className="text-xs text-slate-600">{row.completed_count} completed challenges</p>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                <span>{row.completed_count} completed challenges</span>
+                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                                  {activeWeekIndex ? `Week ${activeWeekIndex}` : "Week"}
+                                  {": "}
+                                  {row.week_progress_percent}%
+                                </span>
+                              </div>
                             </div>
                           </button>
                         );
@@ -541,7 +552,14 @@ export default function LeaderboardPage() {
                                     {row.name}
                                     <RankChangeIndicator delta={change} />
                                   </p>
-                                  <p className="text-xs text-slate-500">{row.completed_count} completions</p>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                    <span>{row.completed_count} completions</span>
+                                    <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                                      {activeWeekIndex ? `Week ${activeWeekIndex}` : "Week"}
+                                      {": "}
+                                      {row.week_progress_percent}%
+                                    </span>
+                                  </div>
                                 </div>
                                 <div className="text-right">
                                   <p className="flex items-center justify-end gap-2 text-lg font-bold text-amber-700">

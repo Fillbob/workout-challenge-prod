@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/strava/ingest",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/strava/ingest",
+      "schedule": "55 23 * * *"
+    }
+  ]
+}
