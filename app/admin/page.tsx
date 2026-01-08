@@ -449,9 +449,7 @@ export default function AdminPage() {
     }
   };
 
-  const startEditing = (challenge: Challenge) => {
-    setEditingId(challenge.id);
-    setForm({
+  const formFromChallenge = (challenge: Challenge) => ({
       week_index: challenge.week_index,
       challenge_index: challenge.challenge_index ?? 1,
       title: challenge.title,
@@ -467,6 +465,16 @@ export default function AdminPage() {
       progress_unit: challenge.progress_unit ?? challenge.target_unit ?? null,
       activity_types: challenge.activity_types ?? [],
     });
+
+  const startEditing = (challenge: Challenge) => {
+    setEditingId(challenge.id);
+    setForm(formFromChallenge(challenge));
+  };
+
+  const startCopying = (challenge: Challenge) => {
+    setEditingId(null);
+    setForm(formFromChallenge(challenge));
+    setStatus("Challenge copied. Update details and create a new challenge.");
   };
 
   const toggleTeamSelection = (teamId: string) => {
@@ -953,6 +961,9 @@ export default function AdminPage() {
                       <td className="p-3 flex gap-3">
                         <button className="text-indigo-400" onClick={() => startEditing(challenge)}>
                           Edit
+                        </button>
+                        <button className="text-emerald-400" onClick={() => startCopying(challenge)}>
+                          Copy
                         </button>
                         <button className="text-rose-400" onClick={() => handleDelete(challenge.id)}>
                           Delete
