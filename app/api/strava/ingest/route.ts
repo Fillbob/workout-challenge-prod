@@ -27,6 +27,9 @@ async function authorizeWithSecret(request: Request, athleteId: number | null) {
     if (webhookSecret === STRAVA_WEBHOOK_SECRET) return true;
   }
 
+  const vercelCron = request.headers.get("x-vercel-cron");
+  if (vercelCron) return true;
+
   if (CRON_SECRET) {
     const headerSecret = request.headers.get("x-cron-secret");
     if (headerSecret === CRON_SECRET) return true;
