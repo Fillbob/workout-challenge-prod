@@ -409,6 +409,7 @@ export default function DashboardPage() {
   const [chatStatus, setChatStatus] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatRoom, setChatRoom] = useState<"team" | "everyone">("team");
   const [lastSeenMessageIds, setLastSeenMessageIds] = useState<Record<string, string | null>>({});
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [progressEntries, setProgressEntries] = useState<SubmissionProgressRow[]>([]);
@@ -980,47 +981,47 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    loadTeamMessages(activeTeamId);
-    if (!activeTeamId) return;
+    loadTeamMessages(activeChatId);
+    if (!activeChatId) return;
 
     const channel = supabase
-      .channel(`team-messages-${activeTeamId}`)
+      .channel(`team-messages-${activeChatId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "team_messages", filter: `team_id=eq.${activeTeamId}` },
-        () => loadTeamMessages(activeTeamId),
+        { event: "INSERT", schema: "public", table: "team_messages", filter: `team_id=eq.${activeChatId}` },
+        () => loadTeamMessages(activeChatId),
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeTeamId, loadTeamMessages, supabase]);
+  }, [activeChatId, loadTeamMessages, supabase]);
 
   useEffect(() => {
-    if (!activeTeamId) return;
+    if (!activeChatId) return;
 
     const lastMessage = teamMessages[teamMessages.length - 1] ?? null;
 
     if (chatOpen) {
-      markChatRead(activeTeamId);
+      markChatRead(activeChatId);
       return;
     }
 
     if (!lastMessage) {
       setUnreadCounts((previous) => ({
         ...previous,
-        [activeTeamId]: 0,
+        [activeChatId]: 0,
       }));
       return;
     }
 
-    const lastSeenId = lastSeenMessageIds[activeTeamId];
+    const lastSeenId = lastSeenMessageIds[activeChatId];
 
     if (!lastSeenId) {
       setUnreadCounts((previous) => ({
         ...previous,
-        [activeTeamId]: teamMessages.length,
+        [activeChatId]: teamMessages.length,
       }));
       return;
     }
@@ -1034,15 +1035,15 @@ export default function DashboardPage() {
 
     setUnreadCounts((previous) => ({
       ...previous,
-      [activeTeamId]: unread,
+      [activeChatId]: unread,
     }));
-  }, [activeTeamId, chatOpen, lastSeenMessageIds, markChatRead, teamMessages]);
+  }, [activeChatId, chatOpen, lastSeenMessageIds, markChatRead, teamMessages]);
 
   useEffect(() => {
-    if (!activeTeamId) {
+    if (!activeChatId) {
       setChatOpen(false);
     }
-  }, [activeTeamId]);
+  }, [activeChatId]);
 
   const handleProfileSave = async () => {
     if (!userId) return;
@@ -1173,7 +1174,7 @@ export default function DashboardPage() {
   };
 
   const handleSendMessage = async () => {
-    if (!activeTeamId) {
+    if (!activeChatId) {
       setChatStatus("Set an active group to chat");
       return;
     }
@@ -1190,7 +1191,7 @@ export default function DashboardPage() {
       const response = await fetch("/api/teams/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId: activeTeamId, message: trimmed }),
+        body: JSON.stringify({ teamId: activeChatId, message: trimmed }),
       });
 
       const payload = await response.json();
@@ -1206,7 +1207,7 @@ export default function DashboardPage() {
       setChatInput("");
       setTeamMessages((prev) => [payload.message, ...prev]);
       setChatStatus("Message sent");
-      loadTeamMessages(activeTeamId);
+      loadTeamMessages(activeChatId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to send message";
       setChatStatus(message);
@@ -1560,6 +1561,10 @@ export default function DashboardPage() {
   };
 
   const activeTeamName = teams.find((t) => t.team?.id === activeTeamId)?.team?.name;
+  const everyoneTeamId = teams.find((team) => team.team?.name === EVERYONE_TEAM_NAME)?.team?.id ?? null;
+  const activeChatId = chatRoom === "everyone" ? everyoneTeamId : activeTeamId;
+  const activeChatName = chatRoom === "everyone" ? "Everyone" : activeTeamName ?? "Active group";
+  const canOpenChat = Boolean(userId && (activeTeamId || everyoneTeamId));
   const hasChanges = changedIds.size > 0;
   const saveDisabled = !hasChanges || isSaving;
 
@@ -1623,7 +1628,7 @@ export default function DashboardPage() {
 
   const cardClass = "app-card app-card-hover";
 
-  const unreadCount = activeTeamId ? unreadCounts[activeTeamId] ?? 0 : 0;
+  const unreadCount = activeChatId ? unreadCounts[activeChatId] ?? 0 : 0;
 
   return (
     <main className="app-shell min-h-screen">
@@ -2403,10 +2408,13 @@ export default function DashboardPage() {
 
           <button
             type="button"
-            disabled={!activeTeamId}
-            onClick={() => activeTeamId && setChatOpen((open) => !open)}
+            disabled={!canOpenChat}
+            onClick={() => {
+              if (!canOpenChat) return;
+              setChatOpen((open) => !open);
+            }}
             className={`group relative app-button-primary app-focus gap-2 px-4 py-2 text-sm ${
-              activeTeamId ? "" : "cursor-not-allowed opacity-60"
+              canOpenChat ? "" : "cursor-not-allowed opacity-60"
             }`}
           >
             <span className="absolute -right-1 -top-1 inline-flex h-3 w-3 animate-pulse rounded-full bg-white/90" />
@@ -2422,13 +2430,42 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {chatOpen && activeTeamId && (
+        {chatOpen && activeChatId && (
           <div className="fixed bottom-24 right-6 z-50 w-[min(420px,calc(100%-2rem))] space-y-3 rounded-2xl border border-orange-100 bg-white/95 shadow-2xl shadow-orange-200 backdrop-blur">
             <div className="flex items-start justify-between gap-3 border-b border-orange-50 px-4 py-3">
               <div>
                 <p className="text-xs font-semibold text-orange-600">Group chat</p>
-                <p className="text-lg font-semibold text-slate-900">{activeTeamName ?? "Active group"}</p>
-                <p className="text-xs text-slate-600">Messages are visible to everyone in your active group.</p>
+                <p className="text-lg font-semibold text-slate-900">{activeChatName}</p>
+                <p className="text-xs text-slate-600">
+                  {chatRoom === "everyone"
+                    ? "Messages are visible to everyone in the challenge."
+                    : "Messages are visible to everyone in your active group."}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setChatRoom("everyone")}
+                    className={`rounded-full border px-2 py-1 font-semibold transition ${
+                      chatRoom === "everyone"
+                        ? "border-orange-500 bg-orange-50 text-orange-700"
+                        : "border-orange-100 text-slate-500 hover:border-orange-200 hover:text-orange-600"
+                    }`}
+                  >
+                    Everyone
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!activeTeamId}
+                    onClick={() => activeTeamId && setChatRoom("team")}
+                    className={`rounded-full border px-2 py-1 font-semibold transition ${
+                      chatRoom === "team"
+                        ? "border-orange-500 bg-orange-50 text-orange-700"
+                        : "border-orange-100 text-slate-500 hover:border-orange-200 hover:text-orange-600"
+                    } ${activeTeamId ? "" : "cursor-not-allowed opacity-60"}`}
+                  >
+                    Active group
+                  </button>
+                </div>
               </div>
               <button
                 type="button"
@@ -2486,7 +2523,7 @@ export default function DashboardPage() {
                 onClick={handleSendMessage}
                 className="inline-flex w-full justify-center rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-600"
               >
-                Send to {activeTeamName ?? "group"}
+                Send to {activeChatName}
               </button>
             </div>
           </div>
