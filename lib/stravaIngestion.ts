@@ -75,9 +75,15 @@ export type StravaSyncResult = {
 const STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities";
 const INGESTION_LOOKBACK_DAYS = 30;
 const SYNC_NOW_BUFFER_MINUTES = 5;
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function parseIsoDate(value: string | null | undefined) {
   if (!value) return null;
+  if (DATE_ONLY_PATTERN.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const parsed = new Date(year, month - 1, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -177,7 +183,8 @@ export function activityMatchesChallenge(
 
   const startDate = parseIsoDate(challenge.start_date);
   const endDate = parseIsoDate(challenge.end_date);
-  const inclusiveEndDate = endDate ? addOneDay(endDate) : null;
+  const inclusiveEndDate =
+    endDate && DATE_ONLY_PATTERN.test(challenge.end_date ?? "") ? addOneDay(endDate) : endDate;
 
   if (
     (startDate && activity.occurred_at < startDate) ||

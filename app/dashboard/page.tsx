@@ -115,6 +115,8 @@ interface ChallengeClosingInfo {
   isUpcoming: boolean;
   closingLabel: string;
   lockDateLabel: string | null;
+  lockTimeLabel: string | null;
+  endDateHasTime: boolean;
   startDateLabel: string | null;
   daysUntilClose: number | null;
 }
@@ -127,6 +129,8 @@ const FALLBACK_CLOSING_INFO: ChallengeClosingInfo = {
   isUpcoming: false,
   closingLabel: "Loading challenge timing...",
   lockDateLabel: null,
+  lockTimeLabel: null,
+  endDateHasTime: false,
   startDateLabel: null,
   daysUntilClose: null,
 };
@@ -140,10 +144,14 @@ function clampPercent(value: number | null) {
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+function isDateOnly(value: string | null) {
+  return Boolean(value && DATE_ONLY_PATTERN.test(value));
+}
+
 function parseDateSafe(value: string | null): Date | null {
   if (!value) return null;
 
-  if (DATE_ONLY_PATTERN.test(value)) {
+  if (isDateOnly(value)) {
     const [year, month, day] = value.split("-").map(Number);
     const parsed = new Date(year, month - 1, day);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -161,7 +169,7 @@ function addDays(date: Date, days: number) {
 
 function startBoundary(date: Date) {
   const next = new Date(date);
-  next.setHours(0, 1, 0, 0);
+  next.setHours(0, 0, 0, 0);
   return next;
 }
 
@@ -171,14 +179,39 @@ function endOfDay(date: Date) {
   return next;
 }
 
+function formatChallengeDateTime(value: string | null) {
+  if (!value) return null;
+  const parsed = parseDateSafe(value);
+  if (!parsed) return value;
+
+  const options: Intl.DateTimeFormatOptions = isDateOnly(value)
+    ? { month: "short", day: "numeric", year: "numeric" }
+    : { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" };
+
+  return parsed.toLocaleString(undefined, options);
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClosingInfo {
   const startDate = parseDateSafe(challenge.start_date);
   const endDate = parseDateSafe(challenge.end_date);
-  const startAt = startDate ? startBoundary(startDate) : null;
-  const lockDate = endDate ? endOfDay(addDays(endDate, EDIT_GRACE_PERIOD_DAYS)) : null;
-  const startDateLabel = startDate
-    ? startDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  const startAt = startDate
+    ? isDateOnly(challenge.start_date)
+      ? startBoundary(startDate)
+      : startDate
     : null;
+  const lockDate = endDate
+    ? isDateOnly(challenge.end_date)
+      ? endOfDay(addDays(endDate, EDIT_GRACE_PERIOD_DAYS))
+      : addDays(endDate, EDIT_GRACE_PERIOD_DAYS)
+    : null;
+  const startDateLabel = formatChallengeDateTime(challenge.start_date);
+  const lockDateLabel = formatChallengeDateTime(challenge.end_date);
+  const lockTimeLabel = lockDate ? formatTime(lockDate) : null;
+  const endDateHasTime = Boolean(challenge.end_date && !isDateOnly(challenge.end_date));
 
   if (startAt && now < startAt) {
     const timeUntilStart = startAt.getTime() - now.getTime();
@@ -193,6 +226,8 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
           ? "Opens today"
           : `Opens in ${daysUntilStart} day${daysUntilStart === 1 ? "" : "s"}`,
       lockDateLabel: null,
+      lockTimeLabel: null,
+      endDateHasTime,
       startDateLabel,
       daysUntilClose: null,
     };
@@ -205,6 +240,8 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
       isUpcoming: false,
       closingLabel: "Closing date not set",
       lockDateLabel: null,
+      lockTimeLabel: null,
+      endDateHasTime,
       startDateLabel,
       daysUntilClose: null,
     };
@@ -217,6 +254,8 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
       isUpcoming: false,
       closingLabel: "Closing date not set",
       lockDateLabel: null,
+      lockTimeLabel: null,
+      endDateHasTime,
       startDateLabel,
       daysUntilClose: null,
     };
@@ -228,7 +267,7 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
   const closingLabel =
     timeRemaining >= 0
       ? daysUntilClose === 0
-        ? "Closes today at 11:59 PM"
+        ? `Closes today at ${lockTimeLabel ?? "end of day"}`
         : `Closing in ${daysUntilClose} day${daysUntilClose === 1 ? "" : "s"}`
       : "Closed";
 
@@ -237,7 +276,9 @@ function getChallengeClosingInfo(challenge: Challenge, now: Date): ChallengeClos
     isLocked,
     isUpcoming: false,
     closingLabel,
-    lockDateLabel: lockDate.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    lockDateLabel,
+    lockTimeLabel,
+    endDateHasTime,
     startDateLabel,
     daysUntilClose,
   };
@@ -1270,7 +1311,11 @@ export default function DashboardPage() {
       const source = submission?.progress_source ?? null;
       const startDate = parseDateSafe(challenge.start_date);
       const endDate = parseDateSafe(challenge.end_date);
-      const endBoundary = endDate ? addDays(endDate, 1) : null;
+      const endBoundary = endDate
+        ? isDateOnly(challenge.end_date)
+          ? addDays(endDate, 1)
+          : endDate
+        : null;
       const progressForChallenge = progressEntries.filter((entry) => entry.challenge_id === challenge.id);
       const windowedEntries = progressForChallenge.filter((entry) => {
         const timestamp = parseDateSafe(entry.updated_at ?? entry.created_at ?? entry.completed_at);
@@ -1894,7 +1939,9 @@ export default function DashboardPage() {
                     : "This challenge hasn't started yet."
                   : closingInfo.isEditable
                     ? closingInfo.lockDateLabel
-                      ? `Edits lock ${closingInfo.lockDateLabel} at 11:59 PM.`
+                      ? closingInfo.endDateHasTime
+                        ? `Edits lock ${closingInfo.lockDateLabel}.`
+                        : `Edits lock ${closingInfo.lockDateLabel} at ${closingInfo.lockTimeLabel ?? "end of day"}.`
                       : "Edits lock at the end of the day."
                     : "Edits are locked for this challenge.";
 
@@ -1939,8 +1986,8 @@ export default function DashboardPage() {
                       <h3 className="text-lg font-semibold text-slate-900">{challenge.title}</h3>
                       <p className="text-sm text-slate-700">{challenge.description}</p>
                       <p className="text-xs text-slate-500">
-                        {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
-                        {challenge.end_date && `Ends ${challenge.end_date}`} · {challenge.base_points} pts
+                        {challenge.start_date && `Starts ${formatChallengeDateTime(challenge.start_date)}`} ·{" "}
+                        {challenge.end_date && `Ends ${formatChallengeDateTime(challenge.end_date)}`} · {challenge.base_points} pts
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                         <span
@@ -2165,8 +2212,8 @@ export default function DashboardPage() {
                             <h3 className="text-base font-semibold text-slate-900">{challenge.title}</h3>
                             <p className="text-sm text-slate-700">{challenge.description}</p>
                             <p className="text-xs text-slate-500">
-                              {challenge.start_date && `Starts ${challenge.start_date}`} · {" "}
-                              {challenge.end_date && `Ended ${challenge.end_date}`} · {challenge.base_points} pts
+                              {challenge.start_date && `Starts ${formatChallengeDateTime(challenge.start_date)}`} ·{" "}
+                              {challenge.end_date && `Ended ${formatChallengeDateTime(challenge.end_date)}`} · {challenge.base_points} pts
                             </p>
                             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                               <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-slate-600">
@@ -2174,7 +2221,9 @@ export default function DashboardPage() {
                               </span>
                               <span className="text-slate-500">
                                 {closingInfo.lockDateLabel
-                                  ? `Edits locked ${closingInfo.lockDateLabel} at 11:59 PM.`
+                                  ? closingInfo.endDateHasTime
+                                    ? `Edits locked ${closingInfo.lockDateLabel}.`
+                                    : `Edits locked ${closingInfo.lockDateLabel} at ${closingInfo.lockTimeLabel ?? "end of day"}.`
                                   : "Edits are locked for this challenge."}
                               </span>
                             </div>

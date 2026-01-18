@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 const DEFAULT_LIMIT = 25;
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type ChallengeRelation =
   | { title?: string | null; base_points: number | null }
@@ -46,8 +47,14 @@ function extractChallenge(relation: ChallengeRelation) {
   return relation ?? undefined;
 }
 
-function parseDate(value: string | null) {
+function parseDate(value: string | null, fallbackTime?: [number, number, number, number]) {
   if (!value) return null;
+  if (DATE_ONLY_PATTERN.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const [hours = 0, minutes = 0, seconds = 0, ms = 0] = fallbackTime ?? [];
+    const parsed = new Date(year, month - 1, day, hours, minutes, seconds, ms);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -129,8 +136,8 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const activeWeekCandidates = allowedChallenges.filter((challenge) => {
-    const start = parseDate(challenge.start_date);
-    const end = parseDate(challenge.end_date);
+    const start = parseDate(challenge.start_date, [0, 0, 0, 0]);
+    const end = parseDate(challenge.end_date, [23, 59, 59, 999]);
     if (start && now < start) return false;
     if (end && now > end) return false;
     return true;
