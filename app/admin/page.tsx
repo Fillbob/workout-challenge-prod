@@ -83,6 +83,7 @@ const metricTypeOptions: { value: ChallengeMetricType; label: string; helper?: s
 
 const DEFAULT_START_TIME = "00:00";
 const DEFAULT_END_TIME = "23:59";
+const TIMEZONE_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/;
 
 const padTime = (value: number) => value.toString().padStart(2, "0");
 
@@ -99,6 +100,16 @@ const formatDateTimeInput = (value: string | null, fallbackTime: string) => {
     `${parsed.getFullYear()}-${padTime(parsed.getMonth() + 1)}-${padTime(parsed.getDate())}`,
     `${padTime(parsed.getHours())}:${padTime(parsed.getMinutes())}`,
   ].join("T");
+};
+
+const normalizeDateTimeForStorage = (value: string | null) => {
+  if (!value) return null;
+  if (DATE_ONLY_PATTERN.test(value)) return value;
+  if (TIMEZONE_PATTERN.test(value)) return value;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toISOString();
 };
 
 export default function AdminPage() {
@@ -228,12 +239,16 @@ export default function AdminPage() {
     const target_value = normalizedTarget.target_value;
     const target_unit = normalizedTarget.target_unit;
     const progress_unit = normalizedTarget.progress_unit;
+    const start_date = normalizeDateTimeForStorage(form.start_date);
+    const end_date = normalizeDateTimeForStorage(form.end_date);
 
     if (editingId) {
       const { error } = await supabase
         .from("challenges")
         .update({
           ...form,
+          start_date,
+          end_date,
           target_value,
           target_unit,
           progress_unit,
@@ -248,6 +263,8 @@ export default function AdminPage() {
     } else {
       const { error } = await supabase.from("challenges").insert({
         ...form,
+        start_date,
+        end_date,
         target_value,
         target_unit,
         progress_unit,
