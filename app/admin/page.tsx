@@ -28,6 +28,8 @@ const commonActivityTypes = [
   "Virtual Ride",
 ];
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 interface Challenge {
   id: string;
   week_index: number;
@@ -78,6 +80,26 @@ const metricTypeOptions: { value: ChallengeMetricType; label: string; helper?: s
   { value: "elevation", label: "Elevation", helper: "Track total elevation gain" },
   { value: "steps", label: "Steps", helper: "Track total step count" },
 ];
+
+const DEFAULT_START_TIME = "00:00";
+const DEFAULT_END_TIME = "23:59";
+
+const padTime = (value: number) => value.toString().padStart(2, "0");
+
+const formatDateTimeInput = (value: string | null, fallbackTime: string) => {
+  if (!value) return "";
+  if (DATE_ONLY_PATTERN.test(value)) {
+    return `${value}T${fallbackTime}`;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return [
+    `${parsed.getFullYear()}-${padTime(parsed.getMonth() + 1)}-${padTime(parsed.getDate())}`,
+    `${padTime(parsed.getHours())}:${padTime(parsed.getMinutes())}`,
+  ].join("T");
+};
 
 export default function AdminPage() {
   const supabase = getSupabaseClient();
@@ -862,19 +884,19 @@ export default function AdminPage() {
                   />
                 </label>
                 <label className="space-y-2 text-sm">
-                  <span className="text-slate-300">Start date</span>
+                  <span className="text-slate-300">Start date & time</span>
                   <input
-                    type="date"
-                    value={form.start_date ?? ""}
+                    type="datetime-local"
+                    value={formatDateTimeInput(form.start_date, DEFAULT_START_TIME)}
                     onChange={(e) => setForm({ ...form, start_date: e.target.value || null })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                   />
                 </label>
                 <label className="space-y-2 text-sm">
-                  <span className="text-slate-300">End date</span>
+                  <span className="text-slate-300">End date & time</span>
                   <input
-                    type="date"
-                    value={form.end_date ?? ""}
+                    type="datetime-local"
+                    value={formatDateTimeInput(form.end_date, DEFAULT_END_TIME)}
                     onChange={(e) => setForm({ ...form, end_date: e.target.value || null })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
                   />
