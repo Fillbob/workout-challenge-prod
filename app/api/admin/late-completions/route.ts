@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   let query = admin
     .from("late_completion_requests")
     .select(
-      "id, status, requested_at, resolved_at, user_id, challenge_id, profiles(display_name), challenges(title, week_index, challenge_index, end_date)",
+      "id, status, requested_at, resolved_at, user_id, challenge_id, challenges(title, week_index, challenge_index, end_date)",
     )
     .order("requested_at", { ascending: false });
 
@@ -99,7 +99,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: queryError.message }, { status: 400 });
   }
 
-  return NextResponse.json({ requests: data ?? [], requestedBy: user?.id ?? null });
+  const userIds = Array.from(
+    new Set((data ?? []).map((row) => row.user_id).filter((id): id is string => Boolean(id))),
+  );
+
+  let profileMap = new Map<string, { display_name?: string | null }>();
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profileError } = await admin
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", userIds);
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 400 });
+    }
+
+    profileMap = new Map(
+      (profiles ?? []).map((profile) => [profile.id, { display_name: profile.display_name ?? null }]),
+    );
+  }
+
+  const requests = (data ?? []).map((row) => ({
+    ...row,
+    profiles: profileMap.get(row.user_id) ?? null,
+  }));
+
+  return NextResponse.json({ requests, requestedBy: user?.id ?? null });
 }
 
 export async function PATCH(request: NextRequest) {
