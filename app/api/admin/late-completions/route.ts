@@ -34,6 +34,20 @@ function computeCompletedAt(endDate: string | null) {
   return timestamp.toISOString();
 }
 
+type ChallengeRow = { end_date?: string | null };
+
+function extractEndDate(value: unknown): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const first = value[0] as ChallengeRow | undefined;
+    return first?.end_date ?? null;
+  }
+  if (typeof value === "object") {
+    return (value as ChallengeRow).end_date ?? null;
+  }
+  return null;
+}
+
 async function requireAdmin() {
   const supabase = await createClient();
   const {
@@ -125,11 +139,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (action === "approve") {
-    const completedAt = computeCompletedAt(
-      Array.isArray(requestRow.challenges)
-        ? requestRow.challenges[0]?.end_date ?? null
-        : requestRow.challenges?.end_date ?? null,
-    );
+    const completedAt = computeCompletedAt(extractEndDate(requestRow.challenges));
 
     const { error: submissionError } = await admin
       .from("submissions")
