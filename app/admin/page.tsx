@@ -56,6 +56,17 @@ interface AdminTeam {
   members: { user_id: string; display_name: string }[];
 }
 
+interface LateCompletionRequest {
+  id: string;
+  status: "pending" | "approved" | "declined";
+  requested_at: string;
+  resolved_at: string | null;
+  user_id: string;
+  challenge_id: string;
+  profiles?: { display_name?: string } | { display_name?: string }[] | null;
+  challenges?: { title?: string; week_index?: number; challenge_index?: number; end_date?: string | null } | { title?: string; week_index?: number; challenge_index?: number; end_date?: string | null }[] | null;
+}
+
 const emptyForm: Omit<Challenge, "id"> = {
   week_index: 1,
   challenge_index: 1,
@@ -130,6 +141,9 @@ export default function AdminPage() {
   const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
   const [announcementLoadingIds, setAnnouncementLoadingIds] = useState<Set<string>>(new Set());
   const announcementEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const [lateRequests, setLateRequests] = useState<LateCompletionRequest[]>([]);
+  const [lateRequestStatus, setLateRequestStatus] = useState<string | null>(null);
+  const [lateRequestLoadingIds, setLateRequestLoadingIds] = useState<Set<string>>(new Set());
 
   const normalizeTargetForDistance = (form: typeof emptyForm) => {
     const parsedValue = Number.isFinite(form.target_value ?? NaN) ? form.target_value : null;
@@ -214,6 +228,23 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadLateCompletionRequests = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/late-completions?status=pending");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to load late completion requests");
+      }
+
+      setLateRequests(result.requests ?? []);
+      setLateRequestStatus(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load late completion requests";
+      setLateRequestStatus(message);
+    }
+  }, []);
+
   useRequireAdmin((_, userRole) => {
     setIsAuthed(true);
     setRole(userRole);
@@ -224,7 +255,8 @@ export default function AdminPage() {
     loadChallenges();
     loadTeams();
     loadAnnouncements();
-  }, [isAuthed, loadChallenges, loadTeams, loadAnnouncements]);
+    loadLateCompletionRequests();
+  }, [isAuthed, loadChallenges, loadTeams, loadAnnouncements, loadLateCompletionRequests]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -375,6 +407,37 @@ export default function AdminPage() {
       setAnnouncementStatus(message);
     } finally {
       setIsPostingAnnouncement(false);
+    }
+  };
+
+  const handleLateCompletionDecision = async (requestId: string, action: "approve" | "decline") => {
+    if (lateRequestLoadingIds.has(requestId)) return;
+    setLateRequestStatus(null);
+    setLateRequestLoadingIds((prev) => new Set([...Array.from(prev), requestId]));
+
+    try {
+      const response = await fetch("/api/admin/late-completions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, action }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Unable to update request");
+      }
+
+      setLateRequests((prev) => prev.filter((item) => item.id !== requestId));
+      setLateRequestStatus(action === "approve" ? "Late completion approved" : "Late completion declined");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update request";
+      setLateRequestStatus(message);
+    } finally {
+      setLateRequestLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
     }
   };
 
@@ -682,6 +745,60 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-indigo-400">Late completions</p>
+              <h2 className="text-2xl font-semibold">Review late completion requests</h2>
+              <p className="text-sm text-slate-400">Approve or decline requests from closed challenges.</p>
+            </div>
+            {lateRequestStatus && <p className="text-sm text-rose-400">{lateRequestStatus}</p>}
+          </div>
+          <div className="space-y-3">
+            {lateRequests.length === 0 && (
+              <p className="text-sm text-slate-500">No pending late completion requests.</p>
+            )}
+            {lateRequests.map((request) => {
+              const profile = Array.isArray(request.profiles) ? request.profiles[0] : request.profiles;
+              const challenge = Array.isArray(request.challenges) ? request.challenges[0] : request.challenges;
+              return (
+                <div key={request.id} className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-100">
+                        {profile?.display_name ?? "Athlete"} requested a late completion
+                      </p>
+                      <p className="text-sm text-slate-300">
+                        Week {challenge?.week_index ?? "--"} · Challenge {challenge?.challenge_index ?? "--"} ·{" "}
+                        {challenge?.title ?? "Challenge"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Requested {new Date(request.requested_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleLateCompletionDecision(request.id, "approve")}
+                        disabled={lateRequestLoadingIds.has(request.id)}
+                        className="rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+                      >
+                        {lateRequestLoadingIds.has(request.id) ? "Saving..." : "Approve"}
+                      </button>
+                      <button
+                        onClick={() => handleLateCompletionDecision(request.id, "decline")}
+                        disabled={lateRequestLoadingIds.has(request.id)}
+                        className="rounded-md border border-rose-400/60 px-3 py-1 text-xs font-semibold text-rose-200 hover:border-rose-300 hover:text-rose-100 disabled:opacity-60"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

@@ -55,6 +55,14 @@ interface SubmissionProgressRow {
   completed_at: string | null;
 }
 
+interface LateCompletionRequest {
+  id: string;
+  challenge_id: string;
+  status: "pending" | "approved" | "declined";
+  requested_at: string | null;
+  resolved_at: string | null;
+}
+
 interface ActivityDetail {
   activity_id: number;
   type: string | null;
@@ -454,6 +462,9 @@ export default function DashboardPage() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [progressEntries, setProgressEntries] = useState<SubmissionProgressRow[]>([]);
   const [activityDetails, setActivityDetails] = useState<Record<number, ActivityDetail>>({});
+  const [lateCompletionRequests, setLateCompletionRequests] = useState<Record<string, LateCompletionRequest>>({});
+  const [lateRequestLoadingIds, setLateRequestLoadingIds] = useState<Set<string>>(new Set());
+  const [lateRequestStatus, setLateRequestStatus] = useState<Record<string, string | null>>({});
   const [stravaStatus, setStravaStatus] = useState<StravaStatus>({
     status: "disconnected",
     lastError: null,
@@ -693,6 +704,26 @@ export default function DashboardPage() {
     [loadActivityDetails, supabase],
   );
 
+  const loadLateCompletionRequests = useCallback(async () => {
+    try {
+      const response = await fetch("/api/late-completions");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load late completion requests");
+      }
+
+      const mapped: Record<string, LateCompletionRequest> = {};
+      (payload.requests ?? []).forEach((row: LateCompletionRequest) => {
+        mapped[row.challenge_id] = row;
+      });
+      setLateCompletionRequests(mapped);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load late completion requests";
+      console.warn(message);
+    }
+  }, []);
+
   const toggleActivitySelection = useCallback((activityId: number, checked: boolean) => {
     setSelectedActivityIds((prev) => {
       const next = new Set(prev);
@@ -924,6 +955,7 @@ export default function DashboardPage() {
     loadChallenges();
     loadSubmissions(userId);
     loadSubmissionProgress(userId);
+    loadLateCompletionRequests();
     loadAnnouncements();
     loadStravaStatus();
     const stored = window.localStorage.getItem("activeTeamId");
@@ -935,6 +967,7 @@ export default function DashboardPage() {
     loadChallenges,
     loadSubmissions,
     loadSubmissionProgress,
+    loadLateCompletionRequests,
     loadAnnouncements,
     loadStravaStatus,
   ]);
@@ -1545,6 +1578,42 @@ export default function DashboardPage() {
       },
     }));
     setChangedIds((prev) => new Set([...Array.from(prev), id]));
+  };
+
+  const handleLateCompletionRequest = async (challengeId: string) => {
+    if (!userId || lateRequestLoadingIds.has(challengeId)) return;
+    setLateRequestStatus((prev) => ({ ...prev, [challengeId]: null }));
+    setLateRequestLoadingIds((prev) => new Set([...Array.from(prev), challengeId]));
+
+    try {
+      const response = await fetch("/api/late-completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to submit request");
+      }
+
+      if (payload.request) {
+        setLateCompletionRequests((prev) => ({
+          ...prev,
+          [challengeId]: payload.request as LateCompletionRequest,
+        }));
+      }
+      setLateRequestStatus((prev) => ({ ...prev, [challengeId]: "Late completion request submitted" }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to submit request";
+      setLateRequestStatus((prev) => ({ ...prev, [challengeId]: message }));
+    } finally {
+      setLateRequestLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(challengeId);
+        return next;
+      });
+    }
   };
 
   const handleSaveSubmissions = async () => {
@@ -2180,6 +2249,10 @@ export default function DashboardPage() {
                   ) : (
                     closedChallenges.map((challenge) => {
                       const checked = submissionState[challenge.id] || false;
+                      const lateRequest = lateCompletionRequests[challenge.id];
+                      const isLateRequestPending = lateRequest?.status === "pending";
+                      const isLateRequestApproved = lateRequest?.status === "approved";
+                      const isLateRequestDeclined = lateRequest?.status === "declined";
                       const closingInfo = currentTime
                         ? getChallengeClosingInfo(challenge, currentTime)
                         : FALLBACK_CLOSING_INFO;
@@ -2227,6 +2300,36 @@ export default function DashboardPage() {
                                   : "Edits are locked for this challenge."}
                               </span>
                             </div>
+                            {(lateRequest || !checked) && (
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                {!checked && !lateRequest && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleLateCompletionRequest(challenge.id)}
+                                    disabled={lateRequestLoadingIds.has(challenge.id)}
+                                    className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {lateRequestLoadingIds.has(challenge.id) ? "Submitting..." : "Request late completion"}
+                                  </button>
+                                )}
+                                {lateRequest && (
+                                  <span
+                                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                      isLateRequestApproved
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : isLateRequestDeclined
+                                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                                          : "border-amber-200 bg-amber-50 text-amber-700"
+                                    }`}
+                                  >
+                                    Late completion {lateRequest.status}
+                                  </span>
+                                )}
+                                {lateRequestStatus[challenge.id] && (
+                                  <span className="text-[11px] text-slate-500">{lateRequestStatus[challenge.id]}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
