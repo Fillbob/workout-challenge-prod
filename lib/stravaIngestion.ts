@@ -76,6 +76,13 @@ const STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities"
 const INGESTION_LOOKBACK_DAYS = 30;
 const SYNC_NOW_BUFFER_MINUTES = 5;
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ACTIVITY_TYPE_NORMALIZE_PATTERN = /[\s_-]+/g;
+
+const normalizeActivityType = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(ACTIVITY_TYPE_NORMALIZE_PATTERN, "")
+    .trim();
 
 export function parseIsoDate(value: string | null | undefined) {
   if (!value) return null;
@@ -203,10 +210,10 @@ export function activityMatchesChallenge(
     const activityType = activity.raw.type;
     if (!activityType) return false;
 
-    const normalizedActivityType = activityType.toLowerCase();
+    const normalizedActivityType = normalizeActivityType(activityType);
     const allowedTypes = challenge.activity_types
       .flatMap((type) => type.split(","))
-      .map((type) => type.trim().toLowerCase())
+      .map((type) => normalizeActivityType(type))
       .filter(Boolean);
 
     if (!allowedTypes.includes(normalizedActivityType)) return false;
