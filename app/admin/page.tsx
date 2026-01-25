@@ -17,6 +17,7 @@ type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "s
 
 const commonActivityTypes = [
   "Run",
+  "Trail Run",
   "Ride",
   "Walk",
   "Hike",
