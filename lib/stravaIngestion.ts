@@ -312,9 +312,12 @@ export function computeAfterForSyncNow({
 }) {
   const week = weekStart ?? startOfWeekUtc(now);
   const challengeStartDate = challengeStart ?? null;
-  const base = challengeStartDate ? (challengeStartDate > week ? challengeStartDate : week) : week;
-  const buffered = new Date(base.getTime() - SYNC_NOW_BUFFER_MINUTES * 60 * 1000);
-  return Math.floor(buffered.getTime() / 1000);
+  if (challengeStartDate) {
+    return Math.floor(challengeStartDate.getTime() / 1000);
+  }
+
+  const bufferedWeekStart = new Date(week.getTime() - SYNC_NOW_BUFFER_MINUTES * 60 * 1000);
+  return Math.floor(bufferedWeekStart.getTime() / 1000);
 }
 
 export type SyncContext = {
