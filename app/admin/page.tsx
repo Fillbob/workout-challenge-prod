@@ -11,7 +11,7 @@ import {
 import { useRequireAdmin } from "@/lib/auth";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { milesToMeters } from "@/lib/units";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ChallengeMetricType = "manual" | "distance" | "duration" | "elevation" | "steps";
 
@@ -145,6 +145,44 @@ export default function AdminPage() {
   const [lateRequests, setLateRequests] = useState<LateCompletionRequest[]>([]);
   const [lateRequestStatus, setLateRequestStatus] = useState<string | null>(null);
   const [lateRequestLoadingIds, setLateRequestLoadingIds] = useState<Set<string>>(new Set());
+
+  const teamNameById = useMemo(() => {
+    return new Map(teams.map((team) => [team.id, team.name]));
+  }, [teams]);
+
+  const challengesByWeekAndTeam = useMemo(() => {
+    const byWeek = new Map<number, Map<string, Challenge[]>>();
+
+    challenges.forEach((challenge) => {
+      const weekBuckets = byWeek.get(challenge.week_index) ?? new Map<string, Challenge[]>();
+      const teamBuckets = challenge.team_ids?.length ? challenge.team_ids : ["__all__"];
+
+      teamBuckets.forEach((teamId) => {
+        const items = weekBuckets.get(teamId) ?? [];
+        items.push(challenge);
+        weekBuckets.set(teamId, items);
+      });
+
+      byWeek.set(challenge.week_index, weekBuckets);
+    });
+
+    return Array.from(byWeek.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([weekIndex, byTeam]) => ({
+        weekIndex,
+        teams: Array.from(byTeam.entries())
+          .map(([teamId, teamChallenges]) => ({
+            teamId,
+            teamName: teamId === "__all__" ? "All groups" : teamNameById.get(teamId) ?? `Unknown group (${teamId})`,
+            challenges: [...teamChallenges].sort((a, b) => a.challenge_index - b.challenge_index),
+          }))
+          .sort((a, b) => {
+            if (a.teamId === "__all__") return -1;
+            if (b.teamId === "__all__") return 1;
+            return a.teamName.localeCompare(b.teamName);
+          }),
+      }));
+  }, [challenges, teamNameById]);
 
   const normalizeTargetForDistance = (form: typeof emptyForm) => {
     const parsedValue = Number.isFinite(form.target_value ?? NaN) ? form.target_value : null;
@@ -1087,56 +1125,56 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-800 text-slate-300">
-                    <tr>
-                      <th className="p-3 text-left">Week</th>
-                      <th className="p-3 text-left">Challenge #</th>
-                      <th className="p-3 text-left">Title</th>
-                      <th className="p-3 text-left">Visibility</th>
-                      <th className="p-3 text-left">Teams</th>
-                      <th className="p-3 text-left">Points</th>
-                      <th className="p-3 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {challenges.map((challenge) => (
-                      <tr key={challenge.id} className="border-t border-slate-800">
-                        <td className="p-3">{challenge.week_index}</td>
-                        <td className="p-3">{challenge.challenge_index}</td>
-                        <td className="p-3">{challenge.title}</td>
-                        <td className="p-3 text-slate-300">{challenge.hidden ? "Hidden" : "Visible"}</td>
-                        <td className="p-3 text-slate-300">
-                          {challenge.team_ids?.length
-                            ? challenge.team_ids
-                                .map((id) => teams.find((team) => team.id === id)?.name ?? id)
-                                .join(", ")
-                            : "All groups"}
-                      </td>
-                      <td className="p-3">{challenge.base_points}</td>
-                      <td className="p-3 flex gap-3">
-                        <button className="text-indigo-400" onClick={() => startEditing(challenge)}>
-                          Edit
-                        </button>
-                        <button className="text-emerald-400" onClick={() => startCopying(challenge)}>
-                          Copy
-                        </button>
-                        <button className="text-rose-400" onClick={() => handleDelete(challenge.id)}>
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4">
+              {challengesByWeekAndTeam.map((weekGroup) => (
+                <div key={weekGroup.weekIndex} className="rounded-lg border border-slate-800 bg-slate-950 p-4 space-y-3">
+                  <h3 className="text-base font-semibold text-slate-100">Week {weekGroup.weekIndex}</h3>
+                  {weekGroup.teams.map((teamGroup) => (
+                    <div key={`${weekGroup.weekIndex}-${teamGroup.teamId}`} className="rounded-md border border-slate-800 overflow-hidden">
+                      <div className="bg-slate-900 px-3 py-2 text-sm font-medium text-indigo-300">
+                        {teamGroup.teamName}
+                      </div>
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-900/60 text-slate-400">
+                          <tr>
+                            <th className="p-3 text-left">Challenge #</th>
+                            <th className="p-3 text-left">Title</th>
+                            <th className="p-3 text-left">Visibility</th>
+                            <th className="p-3 text-left">Points</th>
+                            <th className="p-3 text-left">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {teamGroup.challenges.map((challenge) => (
+                            <tr key={`${teamGroup.teamId}-${challenge.id}`} className="border-t border-slate-800">
+                              <td className="p-3">{challenge.challenge_index}</td>
+                              <td className="p-3">{challenge.title}</td>
+                              <td className="p-3 text-slate-300">{challenge.hidden ? "Hidden" : "Visible"}</td>
+                              <td className="p-3">{challenge.base_points}</td>
+                              <td className="p-3">
+                                <div className="flex gap-3">
+                                  <button className="text-indigo-400" onClick={() => startEditing(challenge)}>
+                                    Edit
+                                  </button>
+                                  <button className="text-emerald-400" onClick={() => startCopying(challenge)}>
+                                    Copy
+                                  </button>
+                                  <button className="text-rose-400" onClick={() => handleDelete(challenge.id)}>
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   ))}
-                  {challenges.length === 0 && (
-                    <tr>
-                      <td className="p-3" colSpan={7}>
-                        <p className="text-slate-500">No challenges created yet.</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                </div>
+              ))}
+              {challengesByWeekAndTeam.length === 0 && (
+                <p className="text-slate-500">No challenges created yet.</p>
+              )}
             </div>
           </>
         )}
