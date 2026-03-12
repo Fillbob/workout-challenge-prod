@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const teamId: string | undefined = body.teamId;
+  const EVERYONE_TEAM_NAME = "Everyone";
 
   if (!teamId) {
     return NextResponse.json({ error: "Team ID is required" }, { status: 400 });
@@ -20,6 +21,20 @@ export async function POST(request: Request) {
   }
 
   const admin = getServiceRoleClient();
+
+  const { data: team, error: teamError } = await admin
+    .from("teams")
+    .select("id, name")
+    .eq("id", teamId)
+    .maybeSingle();
+
+  if (teamError) {
+    return NextResponse.json({ error: teamError.message }, { status: 400 });
+  }
+
+  if (team?.name === EVERYONE_TEAM_NAME) {
+    return NextResponse.json({ error: "Everyone group membership is required" }, { status: 403 });
+  }
 
   const { error } = await admin
     .from("team_members")
